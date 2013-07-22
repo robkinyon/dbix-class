@@ -138,4 +138,56 @@ is_same_sql_bind(
   'Expected SQL on correlated realiased subquery'
 );
 
+$c_rs = $cdrs->search ({}, {
+  prefetch => 'tracks',
+  rows     => 25,
+  '+columns' => { sibling_count => $cdrs->search(
+      {
+        'siblings.artist' => { -ident => 'me.artist' },
+        'siblings.cdid' => { '!=' => ['-and', { -ident => 'me.cdid' }, 23414] },
+      }, { alias => 'siblings' },
+    )->count_rs->as_query,
+  },
+});
+
+is_same_sql_bind(
+  $c_rs->as_query,
+  '(
+    SELECT me.cdid, me.artist, me.title, me.year, me.genreid, me.single_track, (
+        SELECT COUNT( * )
+          FROM cd siblings
+        WHERE siblings.artist = me.artist AND siblings.cdid != me.cdid AND siblings.cdid != ? AND me.artist != ?
+       ), tracks.trackid, tracks.cd, tracks.position, tracks.title, tracks.last_updated_on, tracks.last_updated_at
+      FROM (
+        SELECT me.cdid, me.artist, me.title, me.year, me.genreid, me.single_track
+          FROM cd me
+        WHERE me.artist != ?
+          LIMIT ?
+       ) me
+      LEFT JOIN track tracks
+        ON tracks.cd = me.cdid
+    WHERE me.artist != ?
+   )',
+  [
+
+    # subselect
+    [ { sqlt_datatype => 'integer', dbic_colname => 'siblings.cdid' }
+      => 23414 ],
+
+    [ { sqlt_datatype => 'integer', dbic_colname => 'me.artist' }
+      => 2 ],
+
+    # inner WHERE
+    [ { sqlt_datatype => 'integer', dbic_colname => 'me.artist' }
+      => 2 ],
+
+    [ { sqlt_datatype => 'integer' } => 25 ],
+
+    # outer WHERE
+    [ { sqlt_datatype => 'integer', dbic_colname => 'me.artist' }
+      => 2 ],
+  ],
+  'Expected SQL on limited correlated realiased subquery'
+);
+
 done_testing;
