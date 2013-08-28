@@ -79,7 +79,7 @@ else
   parallel_installdeps_notest Test::Exception Encode::Locale Test::Fatal
   parallel_installdeps_notest Test::Warn bareword::filehandles B::Hooks::EndOfScope Test::Differences HTTP::Status
   parallel_installdeps_notest Test::Pod::Coverage Test::EOL Devel::GlobalDestruction Sub::Name MRO::Compat Class::XSAccessor URI::Escape HTML::Entities
-  parallel_installdeps_notest YAML LWP Class::Trigger JSON::XS DBI DateTime::Format::Builder Class::Accessor::Grouped Package::Variant
+  parallel_installdeps_notest YAML LWP Class::Trigger DBI DateTime::Format::Builder Class::Accessor::Grouped Package::Variant
   parallel_installdeps_notest Moose Module::Install JSON SQL::Translator
 
   if [[ -n "DBICTEST_FIREBIRD_DSN" ]] ; then

@@ -162,12 +162,20 @@ matrix:
         - BREWVER=blead
         - DEVREL_DEPS=true
 
+    # oldest possible
+    - perl: 5.8.1_nt_mb
+      env:
+        - CLEANTEST=false
+        - BREWOPTS="-Dusemorebits"
+        - BREWVER=5.8.1
+
 
   # which ones of the above can fail
   allow_failures:
     - perl: devcpan_5.18.1_thr_mb
     - perl: bleadperl_thr_mb
     - perl: devcpan_bleadperl_thr_mb
+    - perl: 5.8.1_nt_mb
 
 
 # sourcing the files is *EXTREMELY* important - otherwise
