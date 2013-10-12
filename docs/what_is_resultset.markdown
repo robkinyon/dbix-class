@@ -46,10 +46,11 @@ my $rs = $schema->resultset('Artist')->search({
 });
 ```
 
-The implication is that the `$rs->search()` method is what creates a resultset.
-This is only half true. The full truth is that both the `$schema->resultset()`
-method is what initially *instantiates* a resultset. Its resultset is a "full"
-resultset - if `$rs->all()` is called, it will return every row from the table.
+The implication is that the `$rs->search()` method is what isntantiates a
+resultset.  This is only half true. The full truth is that both the
+`$schema->resultset()` method is what initially *instantiates* a resultset. Its
+resultset is a "full" resultset - if `$rs->all()` is called, it will return
+every row from the table.
 
 The `$rs->search()` method, on the other hand, returns another resultset object
 with the additional search criteria applied. This does not affect the original
