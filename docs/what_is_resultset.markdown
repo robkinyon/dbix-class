@@ -33,7 +33,7 @@ When you instantiate a resultset using `$schema->resultset('Artist')`, you have
 an object that can generate the SQL.
 ```sql
 SELECT me.col1, me.col2, ... FROM artists AS me
-`
+```
 
 # The search() method #
 
