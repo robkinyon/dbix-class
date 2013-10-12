@@ -72,8 +72,8 @@ ResultSource objects. This resultsource is what you are definining when you call
 the methods on `__PACKAGE__` in your Result class. Sources have relationships to
 each other. The most common relationship is represented in the database by a
 foreign key (FK) and is considered a parent-child relationship. The row in the
-child table *belongs_to* a row in the parent table and the row in the parent
-table row *has_many* rows in the child table.
+child table *belongs\_to* a row in the parent table and the row in the parent
+table row *has\_many* rows in the child table.
 
 For the rest of this section, let's assume Artist is a parent table for Album.
 The most common relationship definitions would look something like:
@@ -199,6 +199,44 @@ you want to OR clauses together.
 * DBIx::Class passes all your values as bind parameters.
    * Where possible, it passes them in as the proper type, not just strings.
 
+### The trapdoor ###
+
+Sometimes, the SQL you want to use is either not supported by SQL::Abstract or
+would be too cumbersome to specify that way. In that case, you can pass a string
+reference at any point and the contents of that string will be put in verbatim
+at that point. For example,
+```perl
+my $rs = $schema->resultset('Artist')->search(
+    \"LEN(name) < LEN(producer.birthplace)",
+    { join => 'producer' },
+);
+```
+Note that I have passed in a string reference as the first parameter. This is
+perfectly legal and the second parameter is still a hashref of options.
+
+If you want to pass in bind parameters, you can use the ARRAYREFREF form.
+```
+my $input = $cgi->param('input1');
+my $rs = $schema->resultset('Artist')->search(
+    \[ "LEN(name) < LEN(producer.birthplace) OR LEN(?) > 5", $input ],
+    { join => 'producer' },
+);
+```
+While both of those queries are expressible in SQL::Abstract, it would be much
+longer than one line.
+
+**NOTE**: You are responsible for all quoting you may have to do. Normally,
+DBIx::Class attempts to quote everything for you, but you are bypassing all the
+protections DBIx::Class puts into place. Use this feature as sparingly as
+possible.
+
+**NOTE**: By doing this, you are injecting raw SQL into your DBIx::Class
+queries. This means you lose all of the database independence you can have when
+using DBIx::Class. For example, a common development pattern is to write tests
+that use an in-memory SQLite database for speed and ease of maintenance, but
+deploy on a database (such Postgres or Oracle). This becomes much harder if you
+have raw SQL in your queries.
+
 ## The rest ##
 
 The second parameter is where a lot of the magic happens. We've already seen it
@@ -226,7 +264,54 @@ more information on each one of these options (and more).
 
 # Retrieving your rows #
 
-So far, we've talked about how to create the perfect SQL 
+So far, we've talked about how to create the perfect SQL query. We need to get
+the data out of the database, at some point. DBIx::Class provides several ways
+of retrieving your data.
+
+## Get ALL the things! ##
+
+`my @rows = $rs->all();` is the simplest way to retrieve data. Assuming you've
+set up your `$rs` with the right search parameters, `@rows` will contain an
+object of the right Result class for that data source. You most often see this
+in for-loops or when passing the results of a query to a non-DBIx::Class-aware
+function.
+
+## Implicit Cursor ##
+
+Another way of accessing your data is to use a cursor and a while loop.
+Resultsets have a built-in implicit cursor, used as so:
+```perl
+my $rs = $schema->resultset('Artist')->search(...);
+while ( my $row = $rs->next ) {
+    # Do something useful with $row
+}
+```
+And this behaves exactly as you'd expect.
+
+### cached => 1 ###
+
+Once the cursor is drained, the `$rs` will re-query the database if you ask it
+for rows again. So, if you anticipate wanting to loop over the rows of a
+resultset multiple times, you will want to use the "cache" option.
+```perl
+my $rs = $schema->resultset('Artist')->search(... , { cache => 1 });
+while ( my $row = $rs->next ) {
+    # Do something useful with $row
+}
+
+while ( my $row = $rs->next ) {
+    # Do something else useful with $row
+}
+```
+
+**NOTE**: This is a performance optimization and should be used sparingly, if at
+all. Sprinkling this all over your codebase may cause other developers (such as
+you 6 months from now) to be very confused.
+
+## Other methods ##
+
+There are several other methods that will return rows. Please read the
+documentation for more inforamtion.
 
 ## When does the query actually happen? ##
 
@@ -238,6 +323,11 @@ When it does go to the database, it will get as much data as it knows it can get
 in one call. So, it will retrieve all the columns in all the rows that match the
 search criteria in the resultset.
 
+This combination of lazy-where-possible and eager-when-required is a key design
+driver for all of DBIx::Class. The $schema object won't even connect to the
+database until it has to. But, once it has, it will ensure that it always has a
+connection until told otherwise.
+
 Like everything else in DBIx::Class, you're able to modify this behavior. For
 example, you can choose to specify which columns you want to retrieve in the
 second parameter to `$rs->search()`.
@@ -245,7 +335,7 @@ second parameter to `$rs->search()`.
 ## Prefetching ##
 
 A very common use case is to retrieve a set of rows, then iterate over them and
-all of the rows of some has_many relationship. Something like:
+all of the rows of some has\_many relationship. Something like:
 ```perl
 my $artists_rs = $schema->resultset('artist')->search({
     first_album_year => 2000,
@@ -289,7 +379,7 @@ prefetch example above, we might have the following Template Toolkit template:
 ```
 [% FOR artist IN artists -%]
 Name: [% artist.name %]
-    [%- FOR album IN artist.albums %]
+    [% FOR album IN artist.albums -%]
     Album: [% album.name %]
     [%- END %]
 [%- END %]
@@ -337,9 +427,43 @@ you should not sprinkle HRI all over your codebase willy-nilly. The code becomes
 harder to maintain and, honestly, the performance boost is usually on the order
 of 1-2%. The cost of creating objects vs. hashrefs just isn't that high.
 
+# Going beyond the search #
+
+At the beginning, we discussed how the resultset is a query generator. This is
+most evident in how you update or delete rows through DBIx::Class. You can call
+update or delete on the Result objects, if that's appropriate. But, if you need
+to update or delete multiple rows at once, then a resultset is more appropriate.
+Given the following resultset:
+```perl
+my $rs = $schema->resultset('Artist')->search({
+    'producer.name' => 'John',
+}, {
+    join => 'producer',
+});
+
+# Doing an update, issuing only one query
+$rs->update({
+    name => "One of John's artists",
+});
+
+# Doing a delete, issuing only one query
+$rs->delete();
+```
+
+In short, `$rs->search` sets the WHERE clause that can then be used by SELECT,
+UPDATE, or DELETE as needed.
+
 # Extending the ResultSet #
 
-# Relationships #
+The resultset 
+
+# Relationships Redux #
+
+When DBIx::Class traverses a relationship, it performs a search. All searches in
+DBIx::Class are done with resultsets, so relationships are implemented under the
+hood as resultsets. 
+
+# Non-tables #
 
 # Useful extensions #
 
