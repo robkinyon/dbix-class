@@ -221,11 +221,14 @@ standard SQL extension for limits and offsets, so every database vendor has
 developed there own. DBIx::Class works very hard to make sure the right flavor
 of SQL is used for the database you've connected to.
 
-## Retrieving your rows ##
+Read through the documentation for DBIx::Class::ResultSet in the ATTRIBUTES for
+more information on each one of these options (and more).
+
+# Retrieving your rows #
 
 So far, we've talked about how to create the perfect SQL 
 
-# When does the query actually happen? #
+## When does the query actually happen? ##
 
 DBIx::Class is lazy - it will only query the database when it absolutely has to.
 Creating resultset objects doesn't communicate with the database. It is only
@@ -251,7 +254,7 @@ my $artists_rs = $schema->resultset('artist')->search({
 foreach my $artist ( $artists_rs->all ) {
     print "Artist: " . $artist->name . "\n";
     foreach my $album ( $artist->albums ) {
-        print "\tAlbum: " . $album->name . "\n";
+        print "    Album: " . $album->name . "\n";
     }
 }
 ```
@@ -260,7 +263,79 @@ In the normal case (and what most other ORMs do), this would require 1+N SQL
 queries. 1 for the query of the `artists` table and N for the N queries of the
 `albums` table (where N i the number of artists).
 
+DBIx::Class, of course, has a better solution. If we modify the query to be:
+```perl
+my $artists_rs = $schema->resultset('artist')->search({
+    first_album_year => 2000,
+}, {
+    prefetch => 'albums',
+});
+```
+Then, all the albums will be fetched as part of the first query. This collapses
+our 1+N queries into a single (very large) query. This first query will take a
+little more time and uses up extra memory, but the overall runtime is reduced
+quite significantly.
+
+**NOTE**: prefetch should be treated as an *optimization* to be used only when
+absolutely necessary. It should not be treated as a synonym for "join", even
+though it currently behaves as one with respect to connecting tables. Remember -
+this returns all the connecting rows. So, use it sparingly.
+
 ## HashRefInflator (HRI) ##
+
+A common use for pulling data out of a database is to display it in a page of
+some kind, usually by using a template to put things together. If we take our
+prefetch example above, we might have the following Template Toolkit template:
+```
+[% FOR artist IN artists -%]
+Name: [% artist.name %]
+    [%- FOR album IN artist.albums %]
+    Album: [% album.name %]
+    [%- END %]
+[%- END %]
+```
+and we could call it as so:
+```perl
+my $artists_rs = $schema->resultset('artist')->search({
+    first_album_year => 2000,
+}, {
+    prefetch => 'albums',
+});
+
+my $vars = {
+    artists => [ $artist_rs->all ],
+};
+$tt->process( $template_name, $vars );
+```
+
+The problem here is that the template code can now modify our database. So, if
+our template looked like:
+```
+[% FOR artist IN artists -%]
+    [% artist.delete %]
+[%- END %]
+```
+That would be a "Problem"(tm).
+
+DBIx::Class, again, has a solution.
+```
+my $artists_rs = $schema->resultset('artist')->search({
+    first_album_year => 2000,
+}, {
+    prefetch => 'albums',
+    result_class => 'DBIx::Class::ResultClass::HashRefInflator',
+});
+
+# The rest same as before
+```
+Now, instead of being provided an array of My::Schema::Result::Artist objects,
+the template receives an array of hashrefs containing the data of each artist.
+The template can no longer interact with the database, even by mistake.
+
+**NOTE**: This is also a performance boost, sometimes up to 50% faster. However,
+you should not sprinkle HRI all over your codebase willy-nilly. The code becomes
+harder to maintain and, honestly, the performance boost is usually on the order
+of 1-2%. The cost of creating objects vs. hashrefs just isn't that high.
 
 # Extending the ResultSet #
 
