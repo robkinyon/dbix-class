@@ -28,16 +28,19 @@ First, what it is not. Unlike in most other ORMs, a resultset is **not** a
 collection of rows that have been retrieved from the database. It is also not
 the representation of a table in a database or a set of rows in a database.
 
-A resultset, at its heart, is an object that knows how to generate SQL queries.
-When you instantiate a resultset using `$schema->resultset('Artist')`, you have
-an object that can generate the SQL.
+A resultset, at its heart, is a (mostly) immutable object that knows how to
+generate SQL queries. When you instantiate a resultset using
+`$schema->resultset('Artist')`, you have an object that can generate the SQL.
 ```sql
 SELECT me.col1, me.col2, ... FROM artists AS me
 ```
 
+**Note**: The resultset isn't the SQL query - it's a query generator. This is
+how new resultsets can be made from old ones.
+
 # The search() method #
 
-This is not how the documentation normally describes the creation of resultsets.
+This is how the documentation normally describes the use of resultsets.
 Normally, you see something like:
 ```perl
 my $rs = $schema->resultset('Artist')->search({
@@ -46,7 +49,7 @@ my $rs = $schema->resultset('Artist')->search({
 });
 ```
 
-The implication is that the `$rs->search()` method is what isntantiates a
+The implication is that the `$rs->search()` method is what instantiates a
 resultset.  This is only half true. The full truth is that both the
 `$schema->resultset()` method is what initially *instantiates* a resultset. Its
 resultset is a "full" resultset - if `$rs->all()` is called, it will return
@@ -82,7 +85,7 @@ __PACKAGE__->has_many( albums => 'My::Schema::Result::Album' => 'artist_id' );
 __PACKAGE__->belongs_to( artist => 'My::Schema::Result::Artist' => 'artist_id' );
 ```
 
-## The object graph ##
+## Walking the object graph ##
 
 The most common use of relationships is to walk the object graph. Once you have
 a row in the parent `$artist`, you can say
@@ -96,9 +99,9 @@ my $artist = $album->artist;
 ```
 
 Both of those will do a query against the database when you invoke the methods.
-(For how to avoid this, see the Prefetching section below.)
+(For how to avoid this additional query, see the Prefetching section below.)
 
-## JOINs ##
+## Walking JOINs ##
 
 The relationship definitions also allow DBIx::Class to generate SQL queries that
 have joins in them. For example, we may want to get all albums created by a
@@ -108,8 +111,10 @@ my $artist = $schema->resultset('Artist')->search({
     name => 'Beethoven',
 })->first;
 
-my @albums= $artist->albums
+my @albums= $artist->albums;
 ```
+And that would work just fine. But, it's cumbersome and doesn't really describe
+exactly what we're trying to accomplish.
 
 Or, we could do this:
 ```perl
@@ -143,9 +148,84 @@ write, impossible to maintain, and likely very very slow.
 
 More on relationships and joins later.
 
-## Examples of searching ##
+# Searching #
 
-# When does the query happen? #
+In the documentation for `$rs->search()`, there are two parameters. The first
+parameter corresponds to the WHERE clause. It is a data structure which is
+handed off to SQL::Abstract for processing. In most cases, that's all you're
+ever going to need. And, for the most part, that's what most ORMs will provide
+for you. Well over 70% of the queries I've ever written with DBIx::Class only
+use the first parameter.
+
+## The WHERE clause ##
+
+SQL::Abstract is a very powerful tool to build maintainable complex WHERE
+clauses. A full discussion of its power is beyond this article, but here is an
+example that could give you some ideas.
+```perl
+$artist_rs->search([
+    name => [ 'Joe', 'Tim' ],
+    {
+        'producer.name' => { '!=' => 'Maury' },
+        'producer.salary' => { '>=' => 100_000 },
+        -and => [
+            'first_album' => '2000',
+            'last_album' => '2005',
+        ],
+    },
+], {
+    join => 'producer',
+});
+```
+This translates to:
+```sql
+SELECT <columns>
+FROM artist AS me
+JOIN producer AS producer ON (artist.producer_id = producer.id)
+WHERE me.name IN ( ?, ? )
+OR (
+    ( producer.name != ? AND producer.salary >= ? )
+    AND
+    ( first_album = ? OR last_album = ? )
+)
+```
+With bind parameters of `'Joe', 'Tim', 'Maury', 100000, 2000, 2005`
+
+A few things to note:
+* The first parameter doesn't have to be a hashref. It can be an arrayref if
+you want to OR clauses together.
+* You can nest and chain AND and OR clauses together very easily.
+* Operators can be specified, as can IN clauses.
+* DBIx::Class passes all your values as bind parameters.
+   * Where possible, it passes them in as the proper type, not just strings.
+
+## The rest ##
+
+The second parameter is where a lot of the magic happens. We've already seen it
+in action to specify joins through relationships. You can also use it to
+specify (among other things):
+
+1. Limits and offsets
+1. Which columns to retrieve.
+   * Only retrieve the columns you need.
+   * Retrieve a few columns from several other tables as well.
+1. Ordering and grouping
+1. Having clauses
+1. Prefetching related rows. (More in the Prefetching section below)
+1. Caching
+   * This is useful only if you reuse a specific `$rs` object. It does **NOT**
+   provide process-wide caching.
+
+Some of these options have database-specific actions. For example, there is no
+standard SQL extension for limits and offsets, so every database vendor has
+developed there own. DBIx::Class works very hard to make sure the right flavor
+of SQL is used for the database you've connected to.
+
+## Retrieving your rows ##
+
+So far, we've talked about how to create the perfect SQL 
+
+# When does the query actually happen? #
 
 DBIx::Class is lazy - it will only query the database when it absolutely has to.
 Creating resultset objects doesn't communicate with the database. It is only
@@ -156,12 +236,35 @@ in one call. So, it will retrieve all the columns in all the rows that match the
 search criteria in the resultset.
 
 Like everything else in DBIx::Class, you're able to modify this behavior. For
-example, you can choose to specify which columns you want to retrieve. We'll see
-how to do this later.
+example, you can choose to specify which columns you want to retrieve in the
+second parameter to `$rs->search()`.
 
 ## Prefetching ##
 
+A very common use case is to retrieve a set of rows, then iterate over them and
+all of the rows of some has_many relationship. Something like:
+```perl
+my $artists_rs = $schema->resultset('artist')->search({
+    first_album_year => 2000,
+});
 
+foreach my $artist ( $artists_rs->all ) {
+    print "Artist: " . $artist->name . "\n";
+    foreach my $album ( $artist->albums ) {
+        print "\tAlbum: " . $album->name . "\n";
+    }
+}
+```
+
+In the normal case (and what most other ORMs do), this would require 1+N SQL
+queries. 1 for the query of the `artists` table and N for the N queries of the
+`albums` table (where N i the number of artists).
+
+## HashRefInflator (HRI) ##
+
+# Extending the ResultSet #
+
+# Relationships #
 
 # Useful extensions #
 
