@@ -14,7 +14,7 @@ Throughout this document, the following notations will be used:
 * `$schema` is a DBIx::Class::Schema (or schema) object.
 * `$source` is a DBIx::Class::ResultSource (or source) object.
 * `$rs` is a DBIx::Class::ResultSet (or resultset) object. 
-* `$row` is a DBIx::Class::Result (or resultset) object. 
+* `$row` is a DBIx::Class::Row (or row) object. 
 * `My::Schema` is a generic schema class. It may have any classes necessary for
 the examples.
 * Artist and Album are the standard demo tables for DBIx::Class. These may have
@@ -323,7 +323,7 @@ in one call. So, it will retrieve all the columns in all the rows that match the
 search criteria in the resultset.
 
 This combination of lazy-where-possible and eager-when-required is a key design
-driver for all of DBIx::Class. The $schema object won't even connect to the
+driver for all of DBIx::Class. The `$schema` object won't even connect to the
 database until it has to. But, once it has, it will ensure that it always has a
 connection until told otherwise.
 
@@ -421,10 +421,9 @@ Now, instead of being provided an array of My::Schema::Result::Artist objects,
 the template receives an array of hashrefs containing the data of each artist.
 The template can no longer interact with the database, even by mistake.
 
-**NOTE**: This is also a performance boost, sometimes up to 50% faster. However,
-you should not sprinkle HRI all over your codebase willy-nilly. The code becomes
-harder to maintain and, honestly, the performance boost is usually on the order
-of 1-2%. The cost of creating objects vs. hashrefs just isn't that high.
+**NOTE**: This is also a performance boost. It's usually 1-2%, but sometimes
+significantly higher. So, you should not sprinkle HRI all over your codebase
+willy-nilly.
 
 # Going beyond the search #
 
