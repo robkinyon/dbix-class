@@ -455,19 +455,119 @@ UPDATE, or DELETE as needed.
 
 # Extending the ResultSet #
 
-The resultset 
+Each Result class has a corresponding ResultSet class. You are encouraged to
+add methods to this class to make your life easier. For example, you might have
+a search you often apply to resultsets in a specific part of your application.
+This search could be quite complex, spanning several lines. Instead of peppering
+it all over the place, it's much better to put it in one place. Then, you can
+apply that search to a given resultset very simply.
+```perl
+# In My::Schema::ResultSet::Artist
+sub apply_studioA_restrictions {
+    my $self = shift;
+
+    return $self->search(
+        # Crazy thing here
+    );
+}
+
+# In your application code
+$rs = $rs->apply_studioA_restrictions();
+```
+
+Note that we have to assign the return value back to the invocant. Resultsets
+are (mostly) immutable objects.
 
 # Relationships Redux #
 
+## Relationships as Resultsets ##
+
 When DBIx::Class traverses a relationship, it performs a search. All searches in
 DBIx::Class are done with resultsets, so relationships are implemented under the
-hood as resultsets. 
+hood as resultsets. You can get access to the resultset underpinning a
+relationship by calling the `X_rs` method. For example,
+```perl
+# Following a has_many relationship
+my $album_rs = $artist->albums_rs;
 
-# Non-tables #
+# Following a belongs_to relationship
+my $artist_rs = $album->artist_rs;
+```
+
+You can also specify search criteria in the relationship traversal.
+```perl
+my @albums = $artist->albums({ release_year => { '>' => 2000 } });
+
+# Equivalent to
+my @albums = $artist->albums_rs->search({
+    release_year => { '>' => 2000 },
+})->all;
+```
+
+## Multiple Relationships between Sources ##
+
+There is no restriction on the number of relationships you can define between
+two tables. For example, we might have albums table that tracks if an album has
+been released yet. In most of our application's use-cases, we may only want to
+deal with released albums. So, the standard `albums` relationship should be
+restricted to albums where `released = 1`. But, we want to be able to access the
+unreleased albums, if only in the one section of our application where we mark
+them as released!
+```perl
+# In Artist.pm
+
+# Get only released albums - this is the standard relationship usage.
+__PACKAGE__->has_many(
+    albums => 'My::Schema::Result::Album' => {
+        'foreign.artist_id' => 'self.id',
+        'foreign.released'  => 1,
+    },
+);
+
+# Get all albums, released or not.
+__PACKAGE__->has_many(
+    all_albums => 'My::Schema::Result::Album' => 'artist_id',
+);
+
+# Get only unreleased albums
+__PACKAGE__->has_many(
+    unreleased_albums => 'My::Schema::Result::Album' => {
+        'foreign.artist_id' => 'self.id',
+        'foreign.released'  => 0,
+    },
+);
+```
+
+Like all relationships, each of these can be used when walking the object graph
+**AND** in searches. In fact, you can use several of these *in the same search*.
+For example, we want to find artists with a released album starting with 'A' or
+an unreleased album set to release in 2020. (We have a far-thinking studio.)
+```perl
+my @artists = $schema->resultset('Artist')->search([
+    'albums.name' => { -like => 'A%' },
+    'unreleased_albums.release_year' => 2020,
+], {
+    join => [
+        'albums', 'unreleased_albums',
+    ],
+});
+```
+
+# Non-table Sources #
 
 # Useful extensions #
 
-## DBIx::Class::Help::ResultSet::AutoRemoveColumns ##
+As you can imagine, there are dozens of modules on CPAN that extend the power of
+DBIx::Class in various ways. Here is a short-list of useful ways to extend
+resultsets.
+
+## Applying these across your schema ##
+
+frew, a prolific contributor to DBIx::Class, has already described how best to
+apply multiple helpers and base classes across your entire schema. Please read
+how to do it at http://search.cpan.org/~frew/DBIx-Class-Helpers-2.018004/lib/DBIx/Class/Helper/ResultSet.pm#NOTE
+
+## DBIx::Class::Helper::ResultSet::AutoRemoveColumns ##
 
 This will prevent large columns (TEXT, BLOB, etc) from being retrieved by
 default. You can add them into a specific search with `+columns`, if you need to
@@ -475,3 +575,50 @@ retrieve them.
 
 **Note**: If you don't specify `+columns`, you will be unable to retrieve the
 large columns later.
+
+If you want an easy to way to remove specific columns from a given search, look
+at DBIx::Class::Helper::ResultSet::RemoveColumns instead.
+
+## DBIx::Class::ResultSet::CorrelateRelationship ##
+
+The synopsis says it all.
+
+## DBIx::Class::ResultSet::Excel ##
+
+This adds a method `export_excel` that will take the current resultset's rows
+and create an Excel file with the data.
+
+## DBIx::Class::Helper::ResultSet::Shortcut ##
+
+This helper really showcases the power of chaining resultsets. Normally, if you
+want to modify a resultset (say, to order it), you have to execute a search with
+an empty first parameter. Something like:
+```perl
+my $ordered_rs = $rs->search( undef, { order_by => [ 'col1', 'col2' ] } );
+```
+While that works, it's not as easy to read as
+```perl
+my $ordered_rs = $rs->order_by('col1,col2');
+```
+
+The helper adds a number of very useful shortcuts for manipulating resultsets in
+various ways.
+
+## DBIx::Class::Schema::ResultSetAccessors ##
+
+This one is slightly different. It doesn't augment your resultsets, but augments
+your schema. In the spirit of making things simple, this converts the following
+code:
+```perl
+my $all_artists_rs = $schema->resultset('Artist');
+
+# to
+
+my $all_artists_rs = $schema->artists;
+```
+Some people may find the first form easier to work with, preferring the call to
+`resultset()` important as a self-documenting marker. Others may find the second
+form easier, preferring the more literate programming style. It's completely up
+to you and your team.
+
+# Closing #
