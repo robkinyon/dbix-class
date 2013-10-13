@@ -19,8 +19,8 @@ Throughout this document, the following notations will be used:
 the examples.
 * Artist and Album are the standard demo tables for DBIx::Class. These may have
 any columns necessary for the examples.
-* Col1 and Col2 are generic column names on any table. These may have any type
-necessary for the examples.
+* 'col1' and 'col2' are generic column names on any table. These may have any
+type necessary for the examples.
 
 # What is a resultset? #
 
@@ -49,11 +49,10 @@ my $rs = $schema->resultset('Artist')->search({
 });
 ```
 
-The implication is that the `$rs->search()` method is what instantiates a
-resultset.  This is only half true. The full truth is that both the
-`$schema->resultset()` method is what initially *instantiates* a resultset. Its
-resultset is a "full" resultset - if `$rs->all()` is called, it will return
-every row from the table.
+The implication is the `$rs->search()` method is what instantiates a resultset.
+This is only half true. The full truth is that both the `$schema->resultset()`
+method is what initially *instantiates* a resultset. Its resultset is a "full"
+resultset - if `$rs->all()` is called, it will return every row from the table.
 
 The `$rs->search()` method, on the other hand, returns another resultset object
 with the additional search criteria applied. This does not affect the original
@@ -553,8 +552,6 @@ my @artists = $schema->resultset('Artist')->search([
 });
 ```
 
-# Non-table Sources #
-
 # Useful extensions #
 
 As you can imagine, there are dozens of modules on CPAN that extend the power of
@@ -622,3 +619,18 @@ form easier, preferring the more literate programming style. It's completely up
 to you and your team.
 
 # Closing #
+
+You can use DBIx::Class as a Perl clone of other ORMs, treating your database as
+an expensive key-value store of object graphs. And, you'll be just as successful
+as if you'd written your application using one of those other ORMs. The concept
+and implementation of the resultset, however, sets DBIx::Class far above the
+rest in terms of the power, flexibily, and ease of use you gain. I hope I've
+given you a good sense of how resultsets can make your code simpler, easier to
+maintain, and faster.
+
+# Author #
+
+Rob Kinyon <rob.kinyon@gmail.com> is a long-time developer and contributor to
+both CPAN and DBIx::Class. He's written several articles on perl.com and can be
+found at http://robonperl.blogspot.com/, @rkinyon on Twitter, and robkinyon on
+IRC.
