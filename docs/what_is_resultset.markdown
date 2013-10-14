@@ -24,6 +24,10 @@ type necessary for the examples.
 
 # What is a resultset? #
 
+The resultset is the most important ORM concept that you've never heard of.
+Without exaggeration, it's the difference between an ORM you want to use (like
+DBIx::Class) and one you tolerate (the rest of them). More on this below.
+
 First, what it is not. Unlike in most other ORMs, a resultset is **not** a
 collection of rows that have been retrieved from the database. It is also not
 the representation of a table in a database or a set of rows in a database.
@@ -117,7 +121,7 @@ exactly what we're trying to accomplish.
 
 Or, we could do this:
 ```perl
-my @ablums = $schema->resultset('Album')->search({
+my @albums = $schema->resultset('Album')->search({
     'artist.name' => 'Beethoven',
 }, {
     join => 'artist',
@@ -423,9 +427,9 @@ Now, instead of being provided an array of My::Schema::Result::Artist objects,
 the template receives an array of hashrefs containing the data of each artist.
 The template can no longer interact with the database, even by mistake.
 
-**NOTE**: This is also a performance boost. It's usually 1-2%, but sometimes
-significantly higher. So, you should not sprinkle HRI all over your codebase
-willy-nilly.
+**NOTE**: HRI is also a performance boost. It's usually 1-2%, but sometimes
+significantly higher. But, you're left with just arrays and hashes. DBIx::Class
+is a *programmer performance* boost; don't be too quick to discard that.
 
 # Going beyond the search #
 
@@ -583,7 +587,7 @@ The synopsis says it all.
 
 ## DBIx::Class::ResultSet::Excel ##
 
-This adds a method `export\_excel` that will take the current resultset's rows
+This adds a method `export_excel` that will take the current resultset's rows
 and create an Excel file with the data.
 
 ## DBIx::Class::Helper::ResultSet::Shortcut ##
