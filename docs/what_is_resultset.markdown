@@ -68,7 +68,7 @@ examples of this later.
 
 Tables (and other sources of data) are represented in DBIx::Class by
 ResultSource objects. This resultsource is what you are definining when you call
-the methods on `__PACKAGE__` in your Result class. Sources have relationships to
+the methods on `__PACKAGE__` in your Row class. Sources have relationships to
 each other. The most common relationship is represented in the database by a
 foreign key (FK) and is considered a parent-child relationship. The row in the
 child table *belongs\_to* a row in the parent table and the row in the parent
@@ -271,14 +271,14 @@ of retrieving your data.
 
 `my @rows = $rs->all();` is the simplest way to retrieve data. Assuming you've
 set up your `$rs` with the right search parameters, `@rows` will contain an
-object of the right Result class for that data source. You most often see this
+object of the right Row class for that data source. You most often see this
 in for-loops or when passing the results of a query to a non-DBIx::Class-aware
 function.
 
 ## Implicit Cursor ##
 
 Another way of accessing your data is to use a cursor and a while loop.
-Resultsets have a built-in implicit cursor, used as so:
+ResultSets have a built-in implicit cursor, used as so:
 ```perl
 my $rs = $schema->resultset('Artist')->search(...);
 while ( my $row = $rs->next ) {
@@ -431,7 +431,7 @@ willy-nilly.
 
 At the beginning, we discussed how the resultset is a query generator. This is
 most evident in how you update or delete rows through DBIx::Class. You can call
-update or delete on the Result objects, if that's appropriate. But, if you need
+update or delete on the Row objects, if that's appropriate. But, if you need
 to update or delete multiple rows at once, then a resultset is more appropriate.
 Given the following resultset:
 ```perl
@@ -455,9 +455,9 @@ UPDATE, or DELETE as needed.
 
 # Extending the ResultSet #
 
-Each Result class has a corresponding ResultSet class. You are encouraged to
-add methods to this class to make your life easier. For example, you might have
-a search you often apply to resultsets in a specific part of your application.
+Each Row class has a corresponding ResultSet class. You are encouraged to add
+methods to this class to make your life easier. For example, you might have a
+search you often apply to resultsets in a specific part of your application.
 This search could be quite complex, spanning several lines. Instead of peppering
 it all over the place, it's much better to put it in one place. Then, you can
 apply that search to a given resultset very simply.
@@ -475,12 +475,12 @@ sub apply_studioA_restrictions {
 $rs = $rs->apply_studioA_restrictions();
 ```
 
-Note that we have to assign the return value back to the invocant. Resultsets
+Note that we have to assign the return value back to the invocant. ResultSets
 are (mostly) immutable objects.
 
 # Relationships Redux #
 
-## Relationships as Resultsets ##
+## Relationships as ResultSets ##
 
 When DBIx::Class traverses a relationship, it performs a search. All searches in
 DBIx::Class are done with resultsets, so relationships are implemented under the
