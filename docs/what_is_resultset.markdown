@@ -583,7 +583,7 @@ The synopsis says it all.
 
 ## DBIx::Class::ResultSet::Excel ##
 
-This adds a method `export_excel` that will take the current resultset's rows
+This adds a method `export\_excel` that will take the current resultset's rows
 and create an Excel file with the data.
 
 ## DBIx::Class::Helper::ResultSet::Shortcut ##
