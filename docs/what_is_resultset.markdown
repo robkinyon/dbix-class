@@ -214,7 +214,7 @@ Note that I have passed in a string reference as the first parameter. This is
 perfectly legal and the second parameter is still a hashref of options.
 
 If you want to pass in bind parameters, you can use the ARRAYREFREF form.
-```
+```perl
 my $input = $cgi->param('input1');
 my $rs = $schema->resultset('Artist')->search(
     \[ "LEN(name) < LEN(producer.birthplace) OR LEN(?) > 5", $input ],
@@ -404,10 +404,12 @@ our template looked like:
     [% artist.delete %]
 [%- END %]
 ```
-That would be a "Problem"(tm).
+Instead of displaying useful things, that would delete every row from the
+database that we passed into the template. One query at a time. From our
+template. That would be a "Problem"(tm). 
 
 DBIx::Class, again, has a solution.
-```
+```perl
 my $artists_rs = $schema->resultset('artist')->search({
     first_album_year => 2000,
 }, {
