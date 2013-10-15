@@ -69,17 +69,93 @@ focused on the interaction of invoices and lineitems when doing returns, why
 should adding a column to the users table affect this? If you're using fixtures,
 it's because invoices has a FK to sales which has a FK (buyer\_id) to users.
 Since those are non-NULL'able foreign keys, we have to have a value, *even
-though that row makes no difference to the test*. Yes, for some tests of the
-return logic, it might matter, but not for *this* test.
+though that row makes no difference to the test*. (Yes, for some tests of the
+return logic, it might matter, but not for *this* test.)
 
-Instead of hard-coding all of the dependencies, the application should be able
-to figure all of that out at runtime, especially if I tell it everything it
-needs to know.
+The ideal, from a test-writing perspective, is to say "I want these things" and
+something, somewhere, figures out how to build them. And anything those things
+need in order to exist. My test shouldn't know about those things.
 
-# The real solution #
+More to the point, every test should be resilient to any changes outside the
+specific areas the test is focused on. If I have a test that focuses on invoices
+and lineitems, changes to the users table shouldn't affect it. And vice versa.
+
+# Our dream tool #
 
 If we use an ORM, such as DBIx::Class, we have already provided our application
-with all the information it needs to create the necessary rows.
+with all the information it needs to create any necessary rows. The ORM already
+knows what all the foreign keys are - we've told it through the belongs\_to and
+has\_many relationships. So, now when we ask for "two invoices", a row in the
+sales table and its corresponding seller in the users table can be created in
+addition to the two rows in the invoices table.
+
+Let's start to build up what our ideal tool would do by starting with our dream
+invocation. So, maybe something like:
+```perl
+my @invoices = do_magic_thing({
+    invoices => 2,
+});
+```
+It's got "magic" in the name - a good start! `do_magic_thing()` would ideally do
+this:
+1. Drop and recreate the database.
+1. Create everything our two invoice rows would need.
+1. Create our two invoice rows, populating the columns with "reasonable-looking"
+values.
+1. Return back the row objects that it created so we can build on them in our
+test.
+
+## 
+
+## Attributes ##
+
+The other major part of the puzzle is what goes into the columns for the various
+rows we're creating. When you use fixtures, the values are frozen in time. You
+are using "John Smith" who purchased a "red ball" at "2012-05-03 10:44:33" every
+single time.
+
+This can be valuable - identical inputs should result in identical ouputs every
+single time. (And, if that's your use-case, the Sims has you covered.) But, most
+tests want to use a variety of inputs, across as wide variety of
+"reasonable-looking" as possible. So, whatever tool we use should do just that.
+(And, the Sims does. More on this later.)
+
+## Time stops for no-one ##
+
+In the previous section, the example was of "John Smith" buying a "red ball" at
+a specfic time. When the test was written, it's like that the date was either
+very close to the date the test was written or not too far into the future.
+(When I do archaeological code surveys for clients, that's one of the markers I
+look for.) But, our application takes specific actions if the purchase is dated
+before or after today. Our tests need to exercise both paths, so we need to have
+test cases that do just that.
+
+The obvious way is to have the "before" test use "2000-01-01" and the "after"
+test use "2100-01-01" (or somesuch). But, does that really exercise what you
+want your application to be doing? How many times are you going to receive a
+purchase that is over `2100-($curdate{years}+1)` years into the future. It's
+much better to exercise your application with values much closer to today. But,
+your fixtures are **frozen** in time. That's their claim to fame - you cannot up
+and change them willy-nilly.
+
+(And, yes, the Sims handles this case, too.)
+
+# The Sims way #
+
+You've already seen an example of how the Sims looks.
+```perl
+$schema->load_sims({
+    Invoice => [
+        {}, {}, {}, {}, {},
+    ],
+});
+```
+
+# Not everything is a test #
+
+Every example so far has been in the context of a test. That is the major
+use-case for something like the Sims. But, there are other places where it can
+come in handy.
 
 # Author #
 
