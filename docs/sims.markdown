@@ -21,7 +21,7 @@ tests against the database.
 
 The obvious solution to solve this conundrum is something called *fixtures*. 
 Fixtures are a snaphot in time of the data you intend to use. You build up the
-data as you need and take a dump of it (using some tool such as to mydumper or
+data as you need and take a dump of it (using some tool such as to mysqldump or
 `DBIx::Class::Fixtures`). When you run your tests, you would drop and recreate
 the database, load the snapshot into the database, then run your test.
 
