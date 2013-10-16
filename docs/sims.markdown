@@ -1,7 +1,7 @@
 # Synopsis #
 
 Generating useful test data for applications is hard. The standard practices all
-suck. The DBIx::Class extension DBIx::Class::Sims (aka Sims) provides a much
+suck. The `DBIx::Class` extension `DBIx::Class::Sims` (aka Sims) provides a much
 better solution.
 
 # The Problem #
@@ -82,7 +82,7 @@ and lineitems, changes to the users table shouldn't affect it. And vice versa.
 
 # Our dream tool #
 
-If we use an ORM, such as DBIx::Class, we have already provided our application
+If we use an ORM like `DBIx::Class`, we have already provided our application
 with all the information it needs to create any necessary rows. The ORM already
 knows what all the foreign keys are - we've told it through the belongs\_to and
 has\_many relationships. So, now when we ask for "two invoices", a row in the
@@ -105,8 +105,6 @@ values.
 1. Return back the row objects that it created so we can build on them in our
 test.
 
-## 
-
 ## Attributes ##
 
 The other major part of the puzzle is what goes into the columns for the various
@@ -114,52 +112,408 @@ rows we're creating. When you use fixtures, the values are frozen in time. You
 are using "John Smith" who purchased a "red ball" at "2012-05-03 10:44:33" every
 single time.
 
-This can be valuable - identical inputs should result in identical ouputs every
-single time. (And, if that's your use-case, the Sims has you covered.) But, most
-tests want to use a variety of inputs, across as wide variety of
-"reasonable-looking" as possible. So, whatever tool we use should do just that.
-(And, the Sims does. More on this later.)
-
-## Time stops for no-one ##
-
-In the previous section, the example was of "John Smith" buying a "red ball" at
-a specfic time. When the test was written, it's like that the date was either
-very close to the date the test was written or not too far into the future.
-(When I do archaeological code surveys for clients, that's one of the markers I
-look for.) But, our application takes specific actions if the purchase is dated
-before or after today. Our tests need to exercise both paths, so we need to have
-test cases that do just that.
-
-The obvious way is to have the "before" test use "2000-01-01" and the "after"
-test use "2100-01-01" (or somesuch). But, does that really exercise what you
-want your application to be doing? How many times are you going to receive a
-purchase that is over `2100-($curdate{years}+1)` years into the future. It's
-much better to exercise your application with values much closer to today. But,
-your fixtures are **frozen** in time. That's their claim to fame - you cannot up
-and change them willy-nilly.
-
-(And, yes, the Sims handles this case, too.)
-
-# The Sims way #
-
-You've already seen an example of how the Sims looks.
+This can be valuable - identical inputs that result in identical ouputs every
+single time are a good test. So, let's see if we can replicate that with our
+dream invocation. We're going to have to change it to support setting attributes
+on a per-row basis. Maybe, instead of a number of invoices to create, let's
+pass an array of hashes. If a column is set in the hash, then that value is put
+into the row.
 ```perl
-$schema->load_sims({
-    Invoice => [
-        {}, {}, {}, {}, {},
+my @invoices = do_magic_thing({
+    invoices => [
+        { date_purchased => '2012-05-03 10:44:33 },
+        {},
     ],
 });
 ```
+We care about the first invoice's date_purchased, but not for the second
+invoice. This takes care of one of the three values we want to keep fixed.
+
+## Multiple tables ##
+
+The other two values are on different tables. Let's try just adding those tables
+into our magic invocation and see what it looks like:
+```perl
+my @invoices = do_magic_thing({
+    invoices => [
+        { date_purchased => '2012-05-03 10:44:33 },
+        {},
+    ],
+    products => [
+        { name => 'red ball' },
+    ],
+    users => [
+        { name => 'John Smith' },
+    ],
+});
+```
+The first thing that pops out is the return value. It's not just invoices
+anymore. It needs to be all the rows. But, figuring out which objects correspond
+to which rows could get annoying. This function is *magic*, so it should do as
+much of the figuring for us. Maybe, it could give us back a data structure that
+is exactly like the one we give it, just with the hashrefs filled in. Instead of
+`@invoices`, we would get back `$objects`, a hashref of arrays of objects that
+could look like:
+```perl
+$objects = {
+    invoices => [
+        $row1_with_date_purchased_set,
+        $row2_with_nothing_set,
+    ],
+    products => [
+        $row1_with_red_ball,
+    ],
+    users => [
+        $row1_with_john_smith,
+    ],
+};
+```
+
+## Connections ##
+
+Now, we have rows in three tables - invoices, products, and users. But, these
+rows don't exist in a void by themselves. There are connections and linkages so
+that we get "John Smith" purchasing a "red ball" at "2012-05-03 10:44:33". It
+would be great if, when a row is created and it needs a parent row in some other
+table, it would use an existing row in that table if possible. This way, by
+creating the rows in the products and users tables, the linkage rows in the
+sales and lineitems tables would use those rows without us having to say so.
+Since it makes our lives easier, let's assume that this happens.
+
+To be formal, let's expand our specification to say that when a row in a table
+is needed and nothing has been said about it, the following steps will take
+place:
+1. If no rows exist, a row will be created with default values
+1. A random row from that table will be selected and used.
+
+## Relationships ##
+
+Our magic invocation is starting to take shape. Our test involving "John Smith"
+buying a "red ball" at "2012-05-03 10:44:33" has been coded up and has worked
+great, even when a new column was added to the lineitems table. Problem solved,
+right? Not quite.
+
+One of our users has just reported a bug where they bought two products in the
+same sale, but each was on their own invoice. How will our magic invocation
+handle this? Our first stab is just to add the second product - a "blue car" -
+but that's not working right. Can you see the problem?
+```perl
+my $objects = do_magic_thing({
+    invoices => [
+        { date_purchased => '2012-05-03 10:44:33 },
+        {},
+    ],
+    products => [
+        { name => 'red ball' },
+        { name => 'blue car' },
+    ],
+    users => [
+        { name => 'John Smith' },
+    ],
+});
+```
+About half the time, our two invoices both have the same product. It's because
+of our formal specification for connections. We need to explicitly link the
+first invoice to the "red ball" and the second invoice to the "blue car". But,
+there are no columns on the invoices table to do that - the foreign key back to
+invoices is on the lineitems table. It would suck if we had to explicitly have a
+lineitems entry. We don't care about the lineitems objects, so why would we have
+talk about them?
+
+What we really want is to be able to specify the *relationship* between the
+invoices and products tables *through* the lineitems table. If we were using the
+object graph of `DBIx::Class`, we could do something like
+```perl
+$invoice->add_lineitems([
+    {
+        # Other columns here ...
+        product => $schema->resultset('Product')->search({
+            name => 'red ball'
+        }),
+    },
+]);
+```
+"Other columns here" sounds just like the hand-waving we've been doing with our
+magic invocation. Maybe, our magic invocation needs to know about `DBIx::Class`
+relationships *as well as* the table's columns. While we're at it, why are we
+even thinking about tables. We don't care about the database tables so much as
+we care about the `DBIx::Class` objects. So, let's stop using the table names
+and start using the DBIx::Class source names. Once we do that, we can start
+using the relationships we've already defined.
+```perl
+my $objects = do_magic_thing({
+    Invoice => [
+        {
+            date_purchased => '2012-05-03 10:44:33',
+            lineitems => [
+                { product => { name => 'red ball' } },
+            ],
+        },
+        {
+            lineitems => [
+                { product => { name => 'blue car' } },
+            ],
+        },
+    ],
+    User => [
+        { name => 'John Smith' },
+    ],
+});
+```
+Hmmmm. We no longer get back the products in our `$objects`, but that's okay. We
+didn't really care about them, anyways. We just wanted to make sure that the two
+products were different. And, this is much more explicit about what we actually
+do care about - the invoices.
+
+## Column sim types ##
+
+Now that we've removed the products from our top-level list of things we care
+about, it would be awesome if we could remove the user from that list, too. But,
+the user's name is a non-NULL value and there isn't a default value for it. The
+actual value in the name doesn't really matter - "John Smith" was just the name
+some developer picked who no longer works here. But, the name has to be
+"reasonable-looking" - "AS#*1EQsdfa82..0 sx/?/" isn't a good test case. So, in
+the spirit of magic invocations and leaning on the fact that we're now using our
+DBIx::Class objects, let's say that we can add something to the user's name
+column definition that says "When the Sims wants a value, create a random and
+reasonable-looking name." Maybe, we can modify the `__PACKAGE__->add_columns()`
+call to something like:
+```perl
+# In My/Schema/Result/User.pm
+__PACKAGE__->add_columns(
+    # some columns here ...
+    name => {
+        type => 'varchar',
+        size => 100,
+        nullable => 0,
+        sim => {
+            type => 'name',
+        },
+    },
+    # other columns here ...
+);
+```
+We've already seen how we end up needing to extend things. It's pretty easy to
+see how we might want zipcodes, addresses, phone numbers, email addresses - all
+kinds of things that could use a reasonable-looking value.
+
+We can formalize this, too - at least in a way. If a column contains values
+that are regular in some fashion, we should be able to have some *generator*
+that generates values according to some pattern or rule. We'll call these
+generators *types* or "sim\_types".
+
+Now, our magic invocation looks like:
+```perl
+my $objects = do_magic_thing({
+    Invoice => [
+        {
+            date_purchased => '2012-05-03 10:44:33',
+            lineitems => [
+                { product => { name => 'red ball' } },
+            ],
+        },
+        {
+            lineitems => [
+                { product => { name => 'blue car' } },
+            ],
+        },
+    ],
+});
+```
+This is better because we don't care about the user. So, the user's name column
+could be refactored into a first_name and last_name or even removed to some
+other table and our test doesn't break. We're down to exactly and only what we
+care about in this test.
+
+## Business-specific names ##
+
+Well, not quite only what we care about. We're still specifying product names in
+our magic invocation. Just like the user's name, we don't really care what these
+products are called. We want to be protected against the same refactoring of the
+name column in the products table as in the users table. But, there isn't a
+regular pattern for the generation of product names. It's unique to our business
+what a product could be called. So, we need a way to generate values that are
+specific to us. In the same way that we were able to specify a type, it would be
+awesome if we could specify a function that runs whenever a value is needed for
+that column and its return value would be the value used. So, let's say we have
+something like:
+```perl
+# In My/Schema/Result/Product.pm
+__PACKAGE__->add_columns(
+    # some columns here ...
+    name => {
+        type => 'varchar',
+        size => 100,
+        nullable => 0,
+        sim => {
+            func => sub {
+                my @colors = qw( red yellow pink green purple orange blue );
+                my @toys = qw( ball fish bow tree panda cat car );
+                return join( ' ',
+                    $colors[rand @colors],
+                    $toys[rand @toys],
+                );
+            },
+        },
+    },
+    # other columns here ...
+);
+```
+
+Now, our magic invocation can look like this:
+```perl
+my $objects = do_magic_thing({
+    Invoice => [
+        {
+            date_purchased => '2012-05-03 10:44:33',
+            lineitems => [
+                { product => {} },
+            ],
+        },
+        {
+            lineitems => [
+                { product => {} },
+            ],
+        },
+    ],
+});
+```
+We're specifying that we want to create a new product for each lineitem, but we
+don't care what goes into that product. Which is exactly what our test bug says
+is the problem.
+
+## Time stops for no-one ##
+
+Over the past few iterations, we've been stripping out one hard-coded aspect of
+our test specification after another. Other than the relationships, we're down
+to just one last thing - the date. When the test was written, the date was
+either just before today or just after. (When I do archaeological code surveys
+for clients, that's one of the markers I look for.) But, our application takes
+specific actions if the purchase is dated before or after today. Our tests need
+to exercise both paths, so we need to have test cases that do just that.
+
+The obvious way is to have the "before" test use "2000-01-01" and the "after"
+test use "2100-01-01" (or somesuch). But, does that really exercise what we want
+our application to be doing? How many times are we going to receive a purchase
+that is over `2100 - ($curdate{years} + 1)` years into the future. It's much
+better to write our test with values much closer to today, whatever the today
+the test is run on.
+
+Back to our magic invocation, we'd love to be able to say "yesterday" or "today"
+or some other date-time type magic. In fact, I think it would be great if we
+could, at runtime, pass in the same sim information that we have been adding to
+the column definitions.
+```perl
+my $objects = do_magic_thing({
+    Invoice => [
+        {
+            date_purchased => magic_type( time => 'yesterday' ),
+            lineitems => [
+                { product => {} },
+            ],
+        },
+        {
+            lineitems => [
+                { product => {} },
+            ],
+        },
+    ],
+});
+```
+Of course, we could do all the date arithmetic ourselves before the call to
+`do_magic_thing()`, but why should we when we have a magic invocation that does
+all that work for us?
+
+# Making the magic real #
+
+Our magic invocation `do_magic_thing()` is starting to look like a real function
+we could write. It's become pretty obvious that the only object with information
+about all the sources in our schema is, well, the `$schema` object. So,
+`do_magic_thing()` is going to be a method on a `DBIx::Class::Schema` object.
+Something like this would work:
+```perl
+my $objects = $schema->load_sims({
+    Invoice => [
+        {
+            date_purchased => \{ type => time, value => 'yesterday' },
+            lineitems => [
+                { product => {} },
+            ],
+        },
+        {
+            lineitems => [
+                { product => {} },
+            ],
+        },
+    ],
+});
+```
+The only other change is the use of the HASHREFREF instead of `magic_type()`.
+Because `load_sims()` is a method on the `$schema` object, there's no way to
+ensure that there will be a function imported into every possible namespace that
+the `$schema` object could be passed to. We cannot pass in a hashref because
+that's the interface for specifying the columns of a parent object. But, nothing
+(currently) uses a HASHREFREF, or a reference to a hashref. So, we can
+appropriate that for our purposes. (`DBIx::Class` uses REF and ARRAYREFREF for
+various purposes, but not HASHREFREF.)
 
 # Not everything is a test #
 
-Every example so far has been in the context of a test. That is the major
+Our meander down the garden path has been about writing better, more resilient
+tests that don't deal with things they don't care about. That is the major
 use-case for something like the Sims. But, there are other places where it can
-come in handy.
+come in handy. For example, data for developers to work with.
+
+## Developers and Their Data ##
+
+At first, before the application goes live, the only data lives in a developer's
+database. After go-live, the primary source of data ends up in production and a
+process is usually set up to restore the nightly production backup to the QA and
+developer databases. While this process is appealing because it both verifies
+the production backup and provides seemingly useful data to developers, it has
+several flaws to it.
+
+The easiest flaw to fix is that customer data is visible to developers. Most
+teams end up creating a fuzzing procedure as part of their restore process,
+which generally takes care of it.
+
+The second problem is the size of the data. After a few months, the database
+quickly approaches several dozen gigabytes. If every developer has a copy of the
+database, that rapidly becomes very unwieldy. Most teams end up trying to build
+a way of stripping out most of the extraneous data, which never works. So, they
+build a huge set of fixtures, and we all know how that works out.
+
+The third problem is the composition of the data. You'd think that production
+data has everything in it. Every scenario is represented somewhere and all a our
+developer has to do is pick the right user or company or invoice and their work
+will flow. Except, we know that's just not true. Every developer picks a couple
+specific whatevers to develop against, not realizing they're missing this issue
+or that problem.
+
+## Demonstrations of good faith ##
+
+Your salesfolk, at some point, are going to want to do a demonstration to some
+prospective clients or to a trade show or in a presentation to a group. They
+will have a dog and pony show they want to walk through - a narrative they want
+the listeners to follow. They will create a set of users, companies, products,
+and so forth that they want to have in the database.
+
+How will that set be maintained? Will you create a set of fixtures for it? After
+all of this, I would hope not.
+
+# Closing #
+
+In this brave new world of agile development, test data has to be more than an
+afterthought. Generating good test data requires a lot of knowledge about how
+the database is structured and how the pieces interrelate. That knowledge
+changes rapidly over time as your application changes. This change is good, so
+we have to embrace it. Luckily, `DBIx::Class` encapsulates the vast majority of
+those changes, allowing you to think solely about the data you want to test and
+leaving the rest of the complexities to the Sims.
 
 # Author #
 
 Rob Kinyon <rob.kinyon@gmail.com> is a long-time developer and contributor to
-both CPAN and DBIx::Class. He's written several articles on perl.com and can be
-found at http://robonperl.blogspot.com/, @rkinyon on Twitter, and robkinyon on
-IRC.
+both CPAN and `DBIx::Class`. He's written several articles on perl.com and can
+be found at http://robonperl.blogspot.com/, @rkinyon on Twitter, and robkinyon
+on IRC.
