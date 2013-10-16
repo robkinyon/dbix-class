@@ -1,8 +1,8 @@
 # Synopsis #
 
-The resultset is the most important concept in DBIx::Class. In many ways, it is
-the foundational breakthrough behind the power of DBIx::Class. It is unique to
-DBIC, but is frequently misunderstood.
+The resultset is the most important concept in `DBIx::Class` (aka, DBIC). In
+many ways, it is the foundational breakthrough behind the power of DBIC. It is
+unique to DBIC, but is frequently misunderstood.
 
 This document explains what a resultset is, why you should care, and how you can
 (ab)use resultsets for fun and profit.
@@ -11,14 +11,14 @@ This document explains what a resultset is, why you should care, and how you can
 
 Throughout this document, the following notations will be used:
 
-* `$schema` is a DBIx::Class::Schema (or schema) object.
-* `$source` is a DBIx::Class::ResultSource (or source) object.
-* `$rs` is a DBIx::Class::ResultSet (or resultset) object. 
-* `$row` is a DBIx::Class::Row (or row) object. 
+* `$schema` is a `DBIx::Class::Schema` (or schema) object.
+* `$source` is a `DBIx::Class::ResultSource` (or source) object.
+* `$rs` is a `DBIx::Class::ResultSet` (or resultset) object. 
+* `$row` is a `DBIx::Class::Row` (or row) object. 
 * `My::Schema` is a generic schema class. It may have any classes necessary for
 the examples.
-* Artist and Album are the standard demo tables for DBIx::Class. These may have
-any columns necessary for the examples.
+* Artist and Album are the standard demo tables for DBIC. These may have any
+columns necessary for the examples.
 * 'col1' and 'col2' are generic column names on any table. These may have any
 type necessary for the examples.
 
@@ -70,7 +70,7 @@ examples of this later.
 
 # Relationships and JOINs #
 
-Tables (and other sources of data) are represented in DBIx::Class by
+Tables (and other sources of data) are represented in `DBIx::Class` by
 ResultSource objects. This resultsource is what you are definining when you call
 the methods on `__PACKAGE__` in your Row class. Sources have relationships to
 each other. The most common relationship is represented in the database by a
@@ -106,8 +106,8 @@ Both of those will do a query against the database when you invoke the methods.
 
 ## Walking JOINs ##
 
-The relationship definitions also allow DBIx::Class to generate SQL queries that
-have joins in them. For example, we may want to get all albums created by a
+The relationship definitions also allow `DBIx::Class` to generate SQL queries
+that have joins in them. For example, we may want to get all albums created by a
 specific artist. We could do this:
 ```perl
 my $artist = $schema->resultset('Artist')->search({
@@ -157,7 +157,7 @@ In the documentation for `$rs->search()`, there are two parameters. The first
 parameter corresponds to the WHERE clause. It is a data structure which is
 handed off to SQL::Abstract for processing. In most cases, that's all you're
 ever going to need. And, for the most part, that's what most ORMs will provide
-for you. Well over 70% of the queries I've ever written with DBIx::Class only
+for you. Well over 70% of the queries I've ever written with `DBIx::Class` only
 use the first parameter.
 
 ## The WHERE clause ##
@@ -199,7 +199,7 @@ A few things to note:
 you want to OR clauses together.
 * You can nest and chain AND and OR clauses together very easily.
 * Operators can be specified, as can IN clauses.
-* DBIx::Class passes all your values as bind parameters.
+* `DBIx::Class` passes all your values as bind parameters.
    * Where possible, it passes them in as the proper type, not just strings.
 
 ### The trapdoor ###
@@ -230,12 +230,12 @@ longer than one line.
 
 **NOTE**: You are responsible for all quoting you may have to do. Normally,
 DBIx::Class attempts to quote everything for you, but you are bypassing all the
-protections DBIx::Class puts into place. Use this feature as sparingly as
+protections `DBIx::Class` puts into place. Use this feature as sparingly as
 possible.
 
-**NOTE**: By doing this, you are injecting raw SQL into your DBIx::Class
+**NOTE**: By doing this, you are injecting raw SQL into your `DBIx::Class`
 queries. This means you lose all of the database independence you can have when
-using DBIx::Class. For example, a common development pattern is to write tests
+using `DBIx::Class`. For example, a common development pattern is to write tests
 that use an in-memory SQLite database for speed and ease of maintenance, but
 deploy on a database (such Postgres or Oracle). This becomes much harder if you
 have raw SQL in your queries.
@@ -259,16 +259,16 @@ specify (among other things):
 
 Some of these options have database-specific actions. For example, there is no
 standard SQL extension for limits and offsets, so every database vendor has
-developed there own. DBIx::Class works very hard to make sure the right flavor
+developed there own. `DBIx::Class` works very hard to make sure the right flavor
 of SQL is used for the database you've connected to.
 
-Read through the documentation for DBIx::Class::ResultSet in the ATTRIBUTES for
-more information on each one of these options (and more).
+Read through the documentation for `DBIx::Class::ResultSet` in the ATTRIBUTES
+for more information on each one of these options (and more).
 
 # Retrieving your rows #
 
 So far, we've talked about how to create the perfect SQL query. We need to get
-the data out of the database, at some point. DBIx::Class provides several ways
+the data out of the database, at some point. `DBIx::Class` provides several ways
 of retrieving your data.
 
 ## Get ALL the things! ##
@@ -327,11 +327,11 @@ in one call. So, it will retrieve all the columns in all the rows that match the
 search criteria in the resultset.
 
 This combination of lazy-where-possible and eager-when-required is a key design
-driver for all of DBIx::Class. The `$schema` object won't even connect to the
+driver for all of `DBIx::Class`. The `$schema` object won't even connect to the
 database until it has to. But, once it has, it will ensure that it always has a
 connection until told otherwise.
 
-Like everything else in DBIx::Class, you're able to modify this behavior. For
+Like everything else in `DBIx::Class`, you're able to modify this behavior. For
 example, you can choose to specify which columns you want to retrieve in the
 second parameter to `$rs->search()`.
 
@@ -428,16 +428,16 @@ the template receives an array of hashrefs containing the data of each artist.
 The template can no longer interact with the database, even by mistake.
 
 **NOTE**: HRI is also a performance boost. It's usually 1-2%, but sometimes
-significantly higher. But, you're left with just arrays and hashes. DBIx::Class
-is a *programmer performance* boost; don't be too quick to discard that.
+significantly higher. But, you're left with just arrays and hashes. DBIC is a
+*programmer performance* boost; don't be too quick to discard that.
 
 # Going beyond the search #
 
 At the beginning, we discussed how the resultset is a query generator. This is
-most evident in how you update or delete rows through DBIx::Class. You can call
-update or delete on the Row objects, if that's appropriate. But, if you need
-to update or delete multiple rows at once, then a resultset is more appropriate.
-Given the following resultset:
+most evident in how you update or delete rows through `DBIx::Class`. You can
+call update or delete on the Row objects, if that's appropriate. But, if you
+need to update or delete multiple rows at once, then a resultset is more
+appropriate. Given the following resultset:
 ```perl
 my $rs = $schema->resultset('Artist')->search({
     'producer.name' => 'John',
@@ -486,10 +486,10 @@ are (mostly) immutable objects.
 
 ## Relationships as ResultSets ##
 
-When DBIx::Class traverses a relationship, it performs a search. All searches in
-DBIx::Class are done with resultsets, so relationships are implemented under the
-hood as resultsets. You can get access to the resultset underpinning a
-relationship by calling the `X_rs` method. For example,
+When DBIC traverses a relationship, it performs a search. All searches in DBIC
+are done with resultsets, so relationships are implemented under the hood as
+resultsets. You can get access to the resultset underpinning a relationship by
+calling the `X_rs` method. For example,
 ```perl
 # Following a has_many relationship
 my $album_rs = $artist->albums_rs;
@@ -565,7 +565,7 @@ resultsets.
 
 ## Applying these across your schema ##
 
-frew, a prolific contributor to DBIx::Class, has already described how best to
+frew, a prolific contributor to `DBIx::Class`, has already described how best to
 apply multiple helpers and base classes across your entire schema. Please read
 how to do it at http://search.cpan.org/~frew/DBIx-Class-Helpers-2.018004/lib/DBIx/Class/Helper/ResultSet.pm#NOTE
 
@@ -579,7 +579,7 @@ retrieve them.
 large columns later.
 
 If you want an easy to way to remove specific columns from a given search, look
-at DBIx::Class::Helper::ResultSet::RemoveColumns instead.
+at `DBIx::Class::Helper::ResultSet::RemoveColumns` instead.
 
 ## DBIx::Class::ResultSet::CorrelateRelationship ##
 
@@ -625,17 +625,17 @@ to you and your team.
 
 # Closing #
 
-You can use DBIx::Class as a Perl clone of other ORMs, treating your database as
-an expensive key-value store of object graphs. And, you'll be just as successful
-as if you'd written your application using one of those other ORMs. The concept
-and implementation of the resultset, however, sets DBIx::Class far above the
-rest in terms of the power, flexibily, and ease of use you gain. I hope I've
-given you a good sense of how resultsets can make your code simpler, easier to
-maintain, and faster.
+You can use `DBIx::Class` as a Perl clone of other ORMs, treating your database
+as an expensive key-value store of object graphs. And, you'll be just as
+successful as if you'd written your application using one of those other ORMs.
+The concept and implementation of the resultset, however, sets `DBIx::Class` far
+above the rest in terms of the power, flexibily, and ease of use you gain. I
+hope I've given you a good sense of how resultsets can make your code simpler,
+easier to maintain, and faster to boot.
 
 # Author #
 
 Rob Kinyon <rob.kinyon@gmail.com> is a long-time developer and contributor to
-both CPAN and DBIx::Class. He's written several articles on perl.com and can be
-found at http://robonperl.blogspot.com/, @rkinyon on Twitter, and robkinyon on
-IRC.
+both CPAN and `DBIx::Class`. He's written several articles on perl.com and can
+be found at http://robonperl.blogspot.com/, @rkinyon on Twitter, and robkinyon
+on IRC.
