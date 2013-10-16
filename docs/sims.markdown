@@ -48,15 +48,15 @@ are broken.
 Now, you're stuck with a "Problem"(tm). There are several dozen fixtures in use
 across the 400+ tests in your test suite. Do you:
 
-A. Take the 3 days to rework all the fixtures by hand?
-A. Take the 3 days to build a tool to migrate all the fixtures?
+1. Take the 3 days to rework all the fixtures by hand?
+1. Take the 3 days to build a tool to migrate all the fixtures?
    * Note this will require user input to pick the right value in some cases.
-A. Consolidate the fixtures into 3 different scenarios?
-A. Skip the tests?
+1. Consolidate the fixtures into 3 different scenarios?
+1. Skip the tests?
 
-Most teams end up choosing option D. If your team is really disciplined, you may
-end up with options B or C. No-one does option A, even though that's what I keep
-hearing whenever I bring up this problem.
+Most teams end up choosing option 4. If your team is really disciplined, you may
+end up with options 2 or 3. No-one does option 1, even though that's what I keep
+hearing people swear they'll do whenever I bring up this problem.
 
 And this is just adding a column in one table. What happens if the change is to
 add a new table or to refactor a large chunk of tables?
