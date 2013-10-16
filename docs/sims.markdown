@@ -98,6 +98,7 @@ my @invoices = do_magic_thing({
 ```
 It's got "magic" in the name - a good start! `do_magic_thing()` would ideally do
 this:
+
 1. Drop and recreate the database.
 1. Create everything our two invoice rows would need.
 1. Create our two invoice rows, populating the columns with "reasonable-looking"
@@ -183,6 +184,7 @@ Since it makes our lives easier, let's assume that this happens.
 To be formal, let's expand our specification to say that when a row in a table
 is needed and nothing has been said about it, the following steps will take
 place:
+
 1. If no rows exist, a row will be created with default values
 1. A random row from that table will be selected and used.
 
