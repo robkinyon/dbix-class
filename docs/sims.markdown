@@ -22,8 +22,8 @@ tests against the database.
 The obvious solution to solve this conundrum is something called *fixtures*. 
 Fixtures are a snaphot in time of the data you intend to use. You build up the
 data as you need and take a dump of it (using some tool such as to mydumper or
-DBIx::Class::Fixtures). When you run your tests, you would drop and recreate the
-database, load the snapshot into the database, then run your test.
+`DBIx::Class::Fixtures`). When you run your tests, you would drop and recreate
+the database, load the snapshot into the database, then run your test.
 
 At first, this works so well. You can even take the snapshot from production to
 reproduce bugs reported by users and build your regression test suite.
@@ -238,7 +238,7 @@ magic invocation. Maybe, our magic invocation needs to know about `DBIx::Class`
 relationships *as well as* the table's columns. While we're at it, why are we
 even thinking about tables. We don't care about the database tables so much as
 we care about the `DBIx::Class` objects. So, let's stop using the table names
-and start using the DBIx::Class source names. Once we do that, we can start
+and start using the `DBIx::Class` source names. Once we do that, we can start
 using the relationships we've already defined.
 ```perl
 my $objects = do_magic_thing({
@@ -274,7 +274,7 @@ actual value in the name doesn't really matter - "John Smith" was just the name
 some developer picked who no longer works here. But, the name has to be
 "reasonable-looking" - "AS#*1EQsdfa82..0 sx/?/" isn't a good test case. So, in
 the spirit of magic invocations and leaning on the fact that we're now using our
-DBIx::Class objects, let's say that we can add something to the user's name
+`DBIx::Class` objects, let's say that we can add something to the user's name
 column definition that says "When the Sims wants a value, create a random and
 reasonable-looking name." Maybe, we can modify the `__PACKAGE__->add_columns()`
 call to something like:
