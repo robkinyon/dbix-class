@@ -297,14 +297,21 @@ __PACKAGE__->add_columns(
 ```
 We've already seen how we end up needing to extend things. It's pretty easy to
 see how we might want zipcodes, addresses, phone numbers, email addresses - all
-kinds of things that could use a reasonable-looking value.
+kinds of things that could use a reasonable-looking value. So, let's make sure
+we can easily handle those.
+
+This type "name" should return back all sorts of possible names - everything
+from "John Smith" to "Jane Doe" to "Dr. Orville G. Wilkerson III, Esq" to
+"Mukabu". The goal is to have names that are "reasonable-looking", but will
+challenge our code to do the right thing under a variety of circumstances.
 
 We can formalize this, too - at least in a way. If a column contains values
 that are regular in some fashion, we should be able to have some *generator*
 that generates values according to some pattern or rule. We'll call these
 generators *types* or "sim\_types".
 
-Now, our magic invocation looks like:
+Since the name is being set for us, we can remove the user from our magic
+invocation. Now, it looks like:
 ```perl
 my $objects = do_magic_thing({
     Invoice => [
@@ -322,7 +329,7 @@ my $objects = do_magic_thing({
     ],
 });
 ```
-This is better because we don't care about the user. So, the user's name column
+This is better because we never cared about the user. So, the user's name column
 could be refactored into a first_name and last_name or even removed to some
 other table and our test doesn't break. We're down to exactly and only what we
 care about in this test.
@@ -331,8 +338,8 @@ care about in this test.
 
 Well, not quite only what we care about. We're still specifying product names in
 our magic invocation. Just like the user's name, we don't really care what these
-products are called. We want to be protected against the same refactoring of the
-name column in the products table as in the users table. But, there isn't a
+products are called. We want to be protected against the same kind of changes to
+the name column in the products table as in the users table. But, there isn't a
 regular pattern for the generation of product names. It's unique to our business
 what a product could be called. So, we need a way to generate values that are
 specific to us. In the same way that we were able to specify a type, it would be
@@ -361,8 +368,13 @@ __PACKAGE__->add_columns(
     # other columns here ...
 );
 ```
+This is nice because it reuses the same sort of functionality that the "name"
+type introduced, but instead of a "type", we have a "func" (short for function).
+This will create product names like "red bow" or "pink tree" or even "blue car".
+The names will be random, but "reasonable-looking". Hopefully, they will even
+occassionally cause a test to fail, exposing subtle bugs in our application.
 
-Now, our magic invocation can look like this:
+Now, our magic invocation would look like this:
 ```perl
 my $objects = do_magic_thing({
     Invoice => [
@@ -381,8 +393,11 @@ my $objects = do_magic_thing({
 });
 ```
 We're specifying that we want to create a new product for each lineitem, but we
-don't care what goes into that product. Which is exactly what our test bug says
-is the problem.
+don't care what goes into that product, so long as it's different from the
+previous one. This is exactly what the bug report described, but generalized out
+instead of being specifically about red balls and blue cars. (Though, as we've
+already seen, if the bug was about those specific products, we can still capture
+that.)
 
 ## Time stops for no-one ##
 
