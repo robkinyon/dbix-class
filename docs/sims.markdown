@@ -121,7 +121,7 @@ into the row.
 ```perl
 my @invoices = do_magic_thing({
     invoices => [
-        { date_purchased => '2012-05-03 10:44:33 },
+        { date_purchased => '2012-05-03 10:44:33' },
         {},
     ],
 });
@@ -136,7 +136,7 @@ into our magic invocation and see what it looks like:
 ```perl
 my @invoices = do_magic_thing({
     invoices => [
-        { date_purchased => '2012-05-03 10:44:33 },
+        { date_purchased => '2012-05-03 10:44:33' },
         {},
     ],
     products => [
@@ -200,7 +200,7 @@ but that's not working right. Can you see the problem?
 ```perl
 my $objects = do_magic_thing({
     invoices => [
-        { date_purchased => '2012-05-03 10:44:33 },
+        { date_purchased => '2012-05-03 10:44:33' },
         {},
     ],
     products => [
