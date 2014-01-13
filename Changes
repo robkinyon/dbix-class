@@ -7,6 +7,17 @@ Revision history for DBIx::Class
         - More robust handling of circular relationship declarations by loading
           foreign classes less frequently (should resolve issues like
           http://lists.scsys.co.uk/pipermail/dbix-class/2013-June/011374.html)
+          Note that none of this is a manifestations of a DBIC bug, but rather
+          unexpected (but correct) behavior of load-order-dependent (hence
+          logically broken) Resultclass hierarchies. In order to deal with this
+          DBIC is scaling back a large number of sanity checks, which are to be
+          reintroduce pending a better framework for source registration
+        - Fix multiple edge cases of complex prefetch combining incorrectly
+          with correlated subquery selections
+        - Fix multiple edge cases stemming from interaction of a non-selecting
+          order_by specification and distinct and/or complex prefetch
+        - Clarify ambiguous behavior of distinct when used with ResultSetColumn
+          i.e. $rs->search({}, { distinct => 1 })->get_column (...)
         - Setting quote_names propagates to SQL::Translator when producing
           SQLite DDL (it is one of the few producers *NOT* quoting by default)
         - Fix incorrect binding of large integers on old versions of
@@ -16,11 +27,13 @@ Revision history for DBIx::Class
         - Back out self-cleaning from DBIx::Class::Carp for the time being
           (as a side effect fixes RT#86267)
         - Fix incorrect internal use of implicit list context in copy()
+        - Fix 0.08250 regression in driver determination when DBI_DSN is used
         - Tests no longer fail if $ENV{DBI_DSN} is set
         - Throw clearer exception on ->new_related() with a non-existent
           relationship.
         - Fix t/storage/replicated.t class loading problem
         - Stop using the deprecated Class::MOP::load_class()
+        - Fix warning in t/54taint.t with explicitly unset PERL5LIB (RT#91972)
 
     * Misc
         - Replace $row with $result in all docs to be consistent and to

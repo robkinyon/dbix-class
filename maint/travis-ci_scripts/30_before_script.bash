@@ -3,19 +3,33 @@
 source maint/travis-ci_scripts/common.bash
 if [[ -n "$SHORT_CIRCUIT_SMOKE" ]] ; then return ; fi
 
-# poison the environment - basically look through lib, find all mentioned
-# ENVvars and set them to true and see if anything explodes
+# poison the environment
 if [[ "$POISON_ENV" = "true" ]] ; then
+
+  # look through lib, find all mentioned ENVvars and set them
+  # to true and see if anything explodes
   for var in $(grep -P '\$ENV\{' -r lib/ | grep -oP 'DBIC_\w+' | sort -u | grep -v DBIC_TRACE) ; do
     if [[ -z "${!var}" ]] ; then
       export $var=1
     fi
   done
 
+  # bogus nonexisting DBI_*
   export DBI_DSN="dbi:ODBC:server=NonexistentServerAddress"
   export DBI_DRIVER="ADO"
 
+  # make sure tests do not rely on implicid order of returned results
   export DBICTEST_SQLITE_REVERSE_DEFAULT_ORDER=1
+
+  # emulate a local::lib-like env
+  # trick cpanm into executing true as shell - we just need the find+unpack
+  run_or_err "Downloading latest stable DBIC from CPAN" \
+    "SHELL=/bin/true cpanm --look DBIx::Class"
+
+  export PERL5LIB="$( ls -d ~/.cpanm/latest-build/DBIx-Class-*/lib | tail -n1 ):$PERL5LIB"
+
+  # perldoc -l <mod> searches $(pwd)/lib in addition to PERL5LIB etc, hence the cd /
+  echo_err "Latest stable DBIC (without deps) locatable via \$PERL5LIB at $(cd / && perldoc -l DBIx::Class)"
 fi
 
 if [[ "$CLEANTEST" = "true" ]]; then
@@ -26,7 +40,7 @@ if [[ "$CLEANTEST" = "true" ]]; then
   # effects from travis preinstalls)
 
   # trick cpanm into executing true as shell - we just need the find+unpack
-  run_or_err "Downloading DBIC inc/ from CPAN" \
+  [[ -d ~/.cpanm/latest-build/DBIx-Class-*/inc ]] || run_or_err "Downloading latest stable DBIC inc/ from CPAN" \
     "SHELL=/bin/true cpanm --look DBIx::Class"
 
   mv ~/.cpanm/latest-build/DBIx-Class-*/inc .
@@ -39,14 +53,32 @@ if [[ "$CLEANTEST" = "true" ]]; then
   # So instead we still use our stock (possibly old) CPAN, and add some
   # handholding
 
-  # no configure_requires - we will need the usual suspects anyway
-  # without pre-installign these in one pass things like extract_prereqs won't work
-  CPAN_is_sane || installdeps ExtUtils::MakeMaker ExtUtils::CBuilder Module::Build
+  if [[ "$DEVREL_DEPS" == "true" ]] ; then
+    # Many dists still do not pass tests under tb1.5 properly (and it itself
+    # does not even install on things like 5.10). Install the *stable-dev*
+    # latest T::B here, so that it will not show up as a dependency, and
+    # hence it will not get installed a second time as an unsatisfied dep
+    # under cpanm --dev
+    installdeps 'Test::Builder~<1.005'
+
+  elif ! CPAN_is_sane ; then
+    # no configure_requires - we will need the usual suspects anyway
+    # without pre-installing these in one pass things like extract_prereqs won't work
+    installdeps ExtUtils::MakeMaker ExtUtils::CBuilder Module::Build
+
+  fi
 
 else
   # we will be running all dbic tests - preinstall lots of stuff, run basic tests
   # using SQLT and set up whatever databases necessary
   export DBICTEST_SQLT_DEPLOY=1
+
+  # FIXME - need new TB1.5 devrel
+  # if we run under --dev install latest github of TB1.5 first
+  # (unreleased workaround for precedence warnings)
+  if [[ "$DEVREL_DEPS" == "true" ]] ; then
+    parallel_installdeps_notest git://github.com/nthykier/test-more.git@fix-return-precedence-issue
+  fi
 
   # do the preinstall in several passes to minimize amount of cross-deps installing
   # multiple times, and to avoid module re-architecture breaking another install
@@ -56,9 +88,9 @@ else
   parallel_installdeps_notest ExtUtils::MakeMaker
   parallel_installdeps_notest File::Path
   parallel_installdeps_notest Carp
-  parallel_installdeps_notest Module::Build Module::Runtime
-  parallel_installdeps_notest File::Spec Data::Dumper
-  parallel_installdeps_notest Test::Exception Encode::Locale Test::Fatal R/RS/RSAVAGE/Tree-DAG_Node-1.13.tgz
+  parallel_installdeps_notest Module::Build
+  parallel_installdeps_notest File::Spec Data::Dumper Module::Runtime
+  parallel_installdeps_notest Test::Exception Encode::Locale Test::Fatal
   parallel_installdeps_notest Test::Warn B::Hooks::EndOfScope Test::Differences HTTP::Status
   parallel_installdeps_notest Test::Pod::Coverage Test::EOL Devel::GlobalDestruction Sub::Name MRO::Compat Class::XSAccessor URI::Escape HTML::Entities
   parallel_installdeps_notest YAML LWP Class::Trigger JSON::XS DBI DateTime::Format::Builder Class::Accessor::Grouped Package::Variant
@@ -68,10 +100,7 @@ else
     # the official version is very much outdated and does not compile on 5.14+
     # use this rather updated source tree (needs to go to PAUSE):
     # https://github.com/pilcrow/perl-dbd-interbase
-    run_or_err "Fetching patched DBD::InterBase" \
-      "git clone https://github.com/dbsrgits/perl-dbd-interbase ~/dbd-interbase"
-
-    parallel_installdeps_notest ~/dbd-interbase/
+    parallel_installdeps_notest git://github.com/dbsrgits/perl-dbd-interbase.git
   fi
 
 fi
@@ -85,8 +114,8 @@ if [[ "$CLEANTEST" = "true" ]]; then
   # we may need to prepend some stuff to that list
   HARD_DEPS="$(echo $(make listdeps))"
 
-##### TEMPORARY WORKAROUNDS
-  if ! CPAN_is_sane ; then
+##### TEMPORARY WORKAROUNDS needed in case we will be using CPAN.pm
+  if [[ "$DEVREL_DEPS" != "true" ]] && ! CPAN_is_sane ; then
     # combat dzillirium on harness-wide level, otherwise breakage happens weekly
     echo_err "$(tstamp) Ancient CPAN.pm: engaging TAP::Harness::IgnoreNonessentialDzilAutogeneratedTests during dep install"
     perl -MTAP::Harness=3.18 -e1 &>/dev/null || run_or_err "Upgrading TAP::Harness for HARNESS_SUBCLASS support" "cpan TAP::Harness"
@@ -97,6 +126,11 @@ if [[ "$CLEANTEST" = "true" ]]; then
 
     # DBD::SQLite reasonably wants DBI at config time
     HARD_DEPS="DBI $HARD_DEPS"
+
+    # this is a fucked CPAN - won't understand configure_requires of
+    # various pieces we may run into
+    # FIXME - need to get these off metacpan or something instead
+    HARD_DEPS="ExtUtils::Depends B::Hooks::OP::Check $HARD_DEPS"
 
     # FIXME
     # parent is temporary due to Carp https://rt.cpan.org/Ticket/Display.html?id=88494
@@ -139,21 +173,30 @@ my $curskip_re = qr{^ === \x20 \QSkipping nonessential autogenerated tests: \E([
 my (undef, @chunks) = (split qr/$curmod_re/, <>);
 while (@chunks) {
   my ($mod, $log) = splice @chunks, 0, 2;
-  print "!!! Skipped nonessential tests while installing $mod: $1\n"
+  print "!!! Skipped nonessential tests while installing $mod:\n\t$1\n"
     if $log =~ $curskip_re;
 }
 ' <<< "$LASTOUT")
+
+    if [[ -n "$INSTALLDEPS_SKIPPED_TESTLIST" ]] ; then
+      POSTMORTEM="$POSTMORTEM$(
+        echo
+        echo "The following non-essential tests were skipped during deps installation"
+        echo "============================================================="
+        echo "$INSTALLDEPS_SKIPPED_TESTLIST"
+        echo "============================================================="
+        echo
+      )"
+    fi
 
     unset HARNESS_SUBCLASS
   fi
 
 else
-  if [[ -n "$TEST_BUILDER_BETA_CPAN_TARBALL" ]] ; then
-    parallel_installdeps_notest $TEST_BUILDER_BETA_CPAN_TARBALL
-  fi
 
   # listalldeps is deliberate - will upgrade everything it can find
   parallel_installdeps_notest $(make listalldeps)
+
 fi
 
 echo_err "$(tstamp) Dependency installation finished"
@@ -181,8 +224,17 @@ $(perl -0777 -p -e 's/.+\n\n(?!\z)//s' < /proc/cpuinfo)
 = Meminfo
 $(free -m -t)
 
+= Kernel info
+$(uname -a)
+
+= Network Configuration
+$(ip addr)
+
+= Network Sockets Status
+$(sudo netstat -an46p | grep -Pv '\s(CLOSING|(FIN|TIME|CLOSE)_WAIT.?|LAST_ACK)\s')
+
 = Environment
-$(env | grep -P 'TEST|TRAVIS|PERL|DBIC' | LC_ALL=C sort | cat -v)
+$(env | grep -P 'TEST|HARNESS|MAKE|TRAVIS|PERL|DBIC' | LC_ALL=C sort | cat -v)
 
 = Perl in use
 $(perl -V)

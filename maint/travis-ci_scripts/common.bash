@@ -3,6 +3,7 @@
 set -e
 
 TEST_STDERR_LOG=/tmp/dbictest.stderr
+TIMEOUT_CMD="/usr/bin/timeout --kill-after=9.5m --signal=TERM 9m"
 
 echo_err() { echo "$@" 1>&2 ; }
 
@@ -18,6 +19,8 @@ run_or_err() {
 
   LASTEXIT=0
   START_TIME=$SECONDS
+  # the tee is a handy debugging tool when stumpage is exceedingly strong
+  #LASTOUT=$( bash -c "$2" 2>&1 | tee /dev/stderr) || LASTEXIT=$?
   LASTOUT=$( bash -c "$2" 2>&1 ) || LASTEXIT=$?
   DELTA_TIME=$(( $SECONDS - $START_TIME ))
 
@@ -32,6 +35,16 @@ run_or_err() {
   else
     echo_err "done (took ${DELTA_TIME}s)"
   fi
+}
+
+apt_install() {
+  # flatten
+  pkgs="$@"
+
+  # Need to do this at every step, the sources list may very well have changed
+  run_or_err "Updating APT available package list" "sudo apt-get update"
+
+  run_or_err "Installing Debian APT packages: $pkgs" "sudo apt-get install --allow-unauthenticated  --no-install-recommends -y $pkgs"
 }
 
 extract_prereqs() {
@@ -54,8 +67,8 @@ extract_prereqs() {
     exit 1
   fi
 
-  # throw away ascii art, convert to modnames
-  PQ=$(perl -p -e 's/^[^a-z]+//i; s/\-[^\-]+$/ /; s/\-/::/g' <<< "$OUT")
+  # throw away warnings, ascii art, convert to modnames
+  PQ=$(perl -p -e 's/^\!.*//; s/^[^a-z]+//i; s/\-[^\-]+$/ /; s/\-/::/g' <<< "$OUT")
 
   # throw away what was in $@
   for m in "$@" ; do
@@ -90,7 +103,7 @@ parallel_installdeps_notest() {
     "echo \\
 \"$MODLIST\" \\
       | xargs -d '\\n' -n 1 -P $NUMTHREADS bash -c \\
-        'OUT=\$(cpanm --notest --no-man-pages \"\$@\" 2>&1 ) || (LASTEXIT=\$?; echo \"\$OUT\"; exit \$LASTEXIT)' \\
+        'OUT=\$($TIMEOUT_CMD cpanm --notest \"\$@\" 2>&1 ) || (LASTEXIT=\$?; echo \"\$OUT\"; exit \$LASTEXIT)' \\
         'giant space monkey penises'
     "
 }
@@ -108,18 +121,26 @@ installdeps() {
 
   LASTEXIT=0
   START_TIME=$SECONDS
-  LASTOUT=$( cpan_inst "$@" ) || LASTEXIT=$?
+  LASTOUT=$( _dep_inst_with_test "$@" ) || LASTEXIT=$?
   DELTA_TIME=$(( $SECONDS - $START_TIME ))
 
   if [[ "$LASTEXIT" = "0" ]] ; then
     echo_err "done (took ${DELTA_TIME}s)"
   else
-    echo_err -n "failed (after ${DELTA_TIME}s Exit:$LASTEXIT Log:$(/usr/bin/nopaste -q -s Shadowcat -d "Parallel installfail" <<< "$LASTOUT")) retrying with sequential testing ... "
+    local errlog="after ${DELTA_TIME}s Exit:$LASTEXIT Log:$(/usr/bin/nopaste -q -s Shadowcat -d "Parallel testfail" <<< "$LASTOUT")"
+    echo_err -n "failed ($errlog) retrying with sequential testing ... "
+    POSTMORTEM="$POSTMORTEM$(
+      echo
+      echo "Depinstall under $HARNESS_OPTIONS parallel testing failed $errlog"
+      echo "============================================================="
+      echo "Attempted installation of: $@"
+      echo "============================================================="
+    )"
 
     HARNESS_OPTIONS=""
     LASTEXIT=0
     START_TIME=$SECONDS
-    LASTOUT=$( cpan_inst "$@" ) || LASTEXIT=$?
+    LASTOUT=$( _dep_inst_with_test "$@" ) || LASTEXIT=$?
     DELTA_TIME=$(( $SECONDS - $START_TIME ))
 
     if [[ "$LASTEXIT" = "0" ]] ; then
@@ -135,23 +156,29 @@ installdeps() {
   INSTALLDEPS_OUT="${INSTALLDEPS_OUT}${LASTOUT}"
 }
 
-cpan_inst() {
-  /usr/bin/timeout --kill-after=9.5m --signal=TERM 9m cpan "$@" 2>&1
+_dep_inst_with_test() {
+  if [[ "$DEVREL_DEPS" == "true" ]] ; then
+    # --dev is already part of CPANM_OPT
+    $TIMEOUT_CMD cpanm "$@" 2>&1
+  else
+    $TIMEOUT_CMD cpan "$@" 2>&1
 
-  # older perls do not have a CPAN which can exit with error on failed install
-  for m in "$@"; do
-    if ! perl -e '
+    # older perls do not have a CPAN which can exit with error on failed install
+    for m in "$@"; do
+      if ! perl -e '
 
 eval ( q{require } . (
   $ARGV[0] =~ m{ \/ .*? ([^\/]+) $ }x
     ? do { my @p = split (/\-/, $1); pop @p; join "::", @p }
     : $ARGV[0]
-) ) or ( print $@ and exit 1)' "$m" 2> /dev/null ; then
+) ) or ( print $@ and exit 1)
 
-      echo -e "$m installation seems to have failed"
-      return 1
-    fi
-  done
+      ' "$m" 2> /dev/null ; then
+        echo -e "$m installation seems to have failed"
+        return 1
+      fi
+    done
+  fi
 }
 
 CPAN_is_sane() { perl -MCPAN\ 1.94_56 -e 1 &>/dev/null ; }
