@@ -3,6 +3,8 @@
 The resultset is the most important concept in `DBIx::Class` (aka, DBIC). In
 many ways, it is the foundational breakthrough behind the power of DBIC. It is
 unique to DBIC, but is frequently misunderstood.
+^^^ I am pretty sure the unique claim is a lie. I do not know enough about competitors to name nams, but unique? no way.
+
 
 This document explains what a resultset is, why you should care, and how you can
 (ab)use resultsets for fun and profit.
@@ -14,9 +16,11 @@ Throughout this document, the following notations will be used:
 * `$schema` is a `DBIx::Class::Schema` (or schema) object.
 * `$source` is a `DBIx::Class::ResultSource` (or source) object.
 * `$rs` is a `DBIx::Class::ResultSet` (or resultset) object. 
-* `$row` is a `DBIx::Class::Row` (or row) object. 
+* `$row` is a `DBIx::Class::Row` (or row) object.
+^^^ I think I mentiond this but again - call these "Result Object". to be in line with the documentation
+^^^ also https://metacpan.org/source/RIBASUSHI/DBIx-Class-0.08250/lib/DBIx/Class/Row.pm#L56
 * `My::Schema` is a generic schema class. It may have any classes necessary for
-the examples.
+the examples.                                              ^^^ subclasses maybe?
 * Artist and Album are the standard demo tables for DBIC. These may have any
 columns necessary for the examples.
 * 'col1' and 'col2' are generic column names on any table. These may have any
@@ -35,11 +39,14 @@ the representation of a table in a database or a set of rows in a database.
 A resultset, at its heart, is a (mostly) immutable object that knows how to
 generate SQL queries. When you instantiate a resultset using
 `$schema->resultset('Artist')`, you have an object that can generate the SQL.
+                                                             ^^^
+contains a query plan which eventually can result in the SQL - the query generators are deliberately decoupled from an rset
 ```sql
 SELECT me.col1, me.col2, ... FROM artists AS me
 ```
 
 **Note**: The resultset isn't the SQL query - it's a query generator. This is
+                                                       ^^^^^ same inconsistency, it is a query plan representation
 how new resultsets can be made from old ones.
 
 # The search() method #
@@ -55,7 +62,7 @@ my $rs = $schema->resultset('Artist')->search({
 
 The implication is the `$rs->search()` method is what instantiates a resultset.
 This is only half true. The full truth is that both the `$schema->resultset()`
-method is what initially *instantiates* a resultset. Its resultset is a "full"
+method is what initially *instantiates* a resultset. Its resultset is a "full"  <--- I'd add "unconstrained"
 resultset - if `$rs->all()` is called, it will return every row from the table.
 
 The `$rs->search()` method, on the other hand, returns another resultset object
@@ -65,6 +72,8 @@ also does not communicate with the database.
 
 Both of these methods just create new objects. You can call these methods as
 many times as you want with no performance penalty. It is often a good way to
+                                    ^^^^^^^^^^
+Yeeeeah about that. A ->search() call is not cheap. Say "without ever touching your $dbh" or somesuch, but saying it's free is a lie
 organize your program by iteratively building up resultsets. We'll see some
 examples of this later.
 
@@ -72,7 +81,7 @@ examples of this later.
 
 Tables (and other sources of data) are represented in `DBIx::Class` by
 ResultSource objects. This resultsource is what you are definining when you call
-the methods on `__PACKAGE__` in your Row class. Sources have relationships to
+the methods on `__PACKAGE__` in your Row class. Sources have relationships to <--- s/have/may have/
 each other. The most common relationship is represented in the database by a
 foreign key (FK) and is considered a parent-child relationship. The row in the
 child table *belongs\_to* a row in the parent table and the row in the parent
@@ -113,6 +122,8 @@ specific artist. We could do this:
 my $artist = $schema->resultset('Artist')->search({
     name => 'Beethoven',
 })->first;
+^^^ If possible avoid the ->search(<unique criteria>)->first idiom. This is what find() is for.
+
 
 my @albums= $artist->albums;
 ```
@@ -196,11 +207,13 @@ With bind parameters of `'Joe', 'Tim', 'Maury', 100000, 2000, 2005`
 
 A few things to note:
 * The first parameter doesn't have to be a hashref. It can be an arrayref if
-you want to OR clauses together.
+you want to OR clauses together. <--- or anything else understood by SQLA (as shown below)
 * You can nest and chain AND and OR clauses together very easily.
 * Operators can be specified, as can IN clauses.
 * `DBIx::Class` passes all your values as bind parameters.
    * Where possible, it passes them in as the proper type, not just strings.
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+This is sort-of a lie, I would take it out tbh.
 
 ### The trapdoor ###
 
@@ -227,9 +240,12 @@ my $rs = $schema->resultset('Artist')->search(
 ```
 While both of those queries are expressible in SQL::Abstract, it would be much
 longer than one line.
+^^^ Lie, SQLA can not express this currently at all, no mater how many lines
 
 **NOTE**: You are responsible for all quoting you may have to do. Normally,
-DBIx::Class attempts to quote everything for you, but you are bypassing all the
+DBIx::Class attempts to quote everything for you, but <by using literal SQL> you are bypassing all the
+            ^^^^^^^^^^^^^^^^^^^^^^^
+Incorrect, quoting is off by default (and will likely remain this way for a while)
 protections `DBIx::Class` puts into place. Use this feature as sparingly as
 possible.
 
@@ -255,12 +271,14 @@ specify (among other things):
 1. Prefetching related rows. (More in the Prefetching section below)
 1. Caching
    * This is useful only if you reuse a specific `$rs` object. It does **NOT**
-   provide process-wide caching.
+   provide process-wide caching. (for process-wide caching see DBIx::Class::Cursor::Cached)
 
 Some of these options have database-specific actions. For example, there is no
 standard SQL extension for limits and offsets, so every database vendor has
-developed there own. `DBIx::Class` works very hard to make sure the right flavor
+developed their own. `DBIx::Class` works very hard to make sure the right flavor
 of SQL is used for the database you've connected to.
+^^^
+You are missing a brag-point here. Unlike the "resultsets are unique" above, our *transparent* limit dialect implementation is truly unique (also the most complete one I am aware of - see https://metacpan.org/module/DBIx::Class::SQLMaker::LimitDialects#SQL-LIMIT-DIALECTS )
 
 Read through the documentation for `DBIx::Class::ResultSet` in the ATTRIBUTES
 for more information on each one of these options (and more).
@@ -275,7 +293,7 @@ of retrieving your data.
 
 `my @rows = $rs->all();` is the simplest way to retrieve data. Assuming you've
 set up your `$rs` with the right search parameters, `@rows` will contain an
-object of the right Row class for that data source. You most often see this
+object of the right Result class for that data source. You most often see this
 in for-loops or when passing the results of a query to a non-DBIx::Class-aware
 function.
 
@@ -330,6 +348,7 @@ This combination of lazy-where-possible and eager-when-required is a key design
 driver for all of `DBIx::Class`. The `$schema` object won't even connect to the
 database until it has to. But, once it has, it will ensure that it always has a
 connection until told otherwise.
+^^^ I am not sure what are you trying to say, if you meant the reconnect-on-loss - you need to articulate it better
 
 Like everything else in `DBIx::Class`, you're able to modify this behavior. For
 example, you can choose to specify which columns you want to retrieve in the
@@ -428,12 +447,16 @@ the template receives an array of hashrefs containing the data of each artist.
 The template can no longer interact with the database, even by mistake.
 
 **NOTE**: HRI is also a performance boost. It's usually 1-2%, but sometimes
+^^^ try 4-5 *times*. Since 0.08250 there is an HRI-specific codepath within
+    DBIC itself, the inflate_result() of DBIx::Class::ResultClass::HashRefInflator
+    is never actually reached
+    https://github.com/dbsrgits/dbix-class/blob/77a86bbf1a3c00e44fb76c8a3855270bc800d14b/lib/DBIx/Class/ResultSet.pm#L1437
 significantly higher. But, you're left with just arrays and hashes. DBIC is a
 *programmer performance* boost; don't be too quick to discard that.
 
 # Going beyond the search #
 
-At the beginning, we discussed how the resultset is a query generator. This is
+At the beginning, we discussed how the resultset is a query generator. This is <--- s/generator/plan/
 most evident in how you update or delete rows through `DBIx::Class`. You can
 call update or delete on the Row objects, if that's appropriate. But, if you
 need to update or delete multiple rows at once, then a resultset is more
@@ -449,6 +472,8 @@ my $rs = $schema->resultset('Artist')->search({
 $rs->update({
     name => "One of John's artists",
 });
+^^^ bad example - name is usually unique. Perhaps update their commissions?
+
 
 # Doing a delete, issuing only one query
 $rs->delete();
@@ -460,6 +485,8 @@ UPDATE, or DELETE as needed.
 # Extending the ResultSet #
 
 Each Row class has a corresponding ResultSet class. You are encouraged to add
+ ^^^^^^^^^^
+s/Row/Result Class/. Also you need to mention the RS classes are not there by default - one needs to create them
 methods to this class to make your life easier. For example, you might have a
 search you often apply to resultsets in a specific part of your application.
 This search could be quite complex, spanning several lines. Instead of peppering
@@ -490,6 +517,8 @@ When DBIC traverses a relationship, it performs a search. All searches in DBIC
 are done with resultsets, so relationships are implemented under the hood as
 resultsets. You can get access to the resultset underpinning a relationship by
 calling the `X_rs` method. For example,
+^^^ I am not sure hy are you mentioning this. Besides the real underpinning is
+search_related() (a public method in wide use, since it works on results and resultsets alike).
 ```perl
 # Following a has_many relationship
 my $album_rs = $artist->albums_rs;
@@ -511,6 +540,7 @@ my @albums = $artist->albums_rs->search({
 ## Multiple Relationships between Sources ##
 
 There is no restriction on the number of relationships you can define between
+^^^ You need to mentione that more importantly a relationship does not *need* to correspond to what you have in the database FK-wise
 two tables. For example, we might have albums table that tracks if an album has
 been released yet. In most of our application's use-cases, we may only want to
 deal with released albums. So, the standard `albums` relationship should be
@@ -524,7 +554,7 @@ them as released!
 __PACKAGE__->has_many(
     albums => 'My::Schema::Result::Album' => {
         'foreign.artist_id' => 'self.id',
-        'foreign.released'  => 1,
+        'foreign.released'  => 1,   <---- this does not work (and never will). You wanted the sub{} syntax
     },
 );
 
